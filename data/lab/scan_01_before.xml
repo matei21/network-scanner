@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///C:/Program Files (x86)/Nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.993 scan initiated Sat Nov  7 18:39:30 2026 as: &quot;C:\\Program Files (x86)\\Nmap\\nmap.exe&quot; -sS -sU -sV -&#45;script http-title -&#45;max-rate 100 -p T:1-1000,1883,2121,2222,2323,6379,8080,U:53,123,161,1900,5353 -oX D:\\sh2026\\network-scanner\\data\\lab\\scan_01_before.xml 10.74.130.0/24 -->
+<nmaprun scanner="nmap" args="&quot;C:\\Program Files (x86)\\Nmap\\nmap.exe&quot; -sS -sU -sV -&#45;script http-title -&#45;max-rate 100 -p T:1-1000,1883,2121,2222,2323,6379,8080,U:53,123,161,1900,5353 -oX D:\\sh2026\\network-scanner\\data\\lab\\scan_01_before.xml 10.74.130.0/24" start="1794069570" startstr="Sat Nov  7 18:39:30 2026" version="7.993" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="1006" services="1-1000,1883,2121,2222,2323,6379,8080"/>
+<scaninfo type="udp" protocol="udp" numservices="5" services="53,123,161,1900,5353"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.9" addrtype="ipv4"/>
+<address addr="1C:1B:B5:D7:04:42" addrtype="mac" vendor="Intel Corporate"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.53" addrtype="ipv4"/>
+<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<taskprogress task="SYN Stealth Scan" time="1794070446" percent="74.19" remaining="301" etc="1794070747"/>
+<taskprogress task="SYN Stealth Scan" time="1794070714" percent="75.92" remaining="364" etc="1794071078"/>
+<taskprogress task="Service scan" time="1794070890" percent="50.00" remaining="35" etc="1794070925"/>
+<taskprogress task="Service scan" time="1794070908" percent="50.00" remaining="46" etc="1794070954"/>
+<taskprogress task="Service scan" time="1794070913" percent="50.00" remaining="62" etc="1794070975"/>
+<host starttime="1794069579" endtime="1794070966"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.9" addrtype="ipv4"/>
+<address addr="1C:1B:B5:D7:04:42" addrtype="mac" vendor="Intel Corporate"/>
+<hostnames>
+</hostnames>
+<ports><extraports state="filtered" count="1005">
+<extrareasons reason="no-response" count="1005" proto="tcp" ports="1-134,136-1000,1883,2121,2222,2323,6379,8080"/>
+</extraports>
+<port protocol="tcp" portid="135"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="tcpwrapped" method="probed" conf="8"/></port>
+<port protocol="udp" portid="53"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="domain" product="dnsmasq" version="2.51" method="probed" conf="10"><cpe>cpe:/a:thekelleys:dnsmasq:2.51</cpe></service></port>
+<port protocol="udp" portid="123"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="ntp" method="table" conf="3"/></port>
+<port protocol="udp" portid="161"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="snmp" method="table" conf="3"/></port>
+<port protocol="udp" portid="1900"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="upnp" method="table" conf="3"/></port>
+<port protocol="udp" portid="5353"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="zeroconf" method="table" conf="3"/></port>
+</ports>
+<times srtt="11870" rttvar="7289" to="100000"/>
+</host>
+<host starttime="1794069579" endtime="1794070965"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.53" addrtype="ipv4"/>
+<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<ports><extraports state="closed" count="1009">
+<extrareasons reason="reset" count="1005" proto="tcp" ports="1-52,54-1000,1883,2121,2222,2323,6379,8080"/>
+<extrareasons reason="port-unreach" count="4" proto="udp" ports="123,161,1900,5353"/>
+</extraports>
+<port protocol="tcp" portid="53"><state state="open" reason="syn-ack" reason_ttl="64"/><service name="domain" product="dnsmasq" version="2.51" method="probed" conf="10"><cpe>cpe:/a:thekelleys:dnsmasq:2.51</cpe></service></port>
+<port protocol="udp" portid="53"><state state="open" reason="udp-response" reason_ttl="64"/><service name="domain" product="dnsmasq" version="2.51" method="probed" conf="10"><cpe>cpe:/a:thekelleys:dnsmasq:2.51</cpe></service></port>
+</ports>
+<times srtt="9928" rttvar="4761" to="100000"/>
+</host>
+<taskprogress task="Service scan" time="1794071030" percent="75.00" remaining="17" etc="1794071047"/>
+<host starttime="1794070966" endtime="1794071088"><status state="up" reason="localhost-response" reason_ttl="0"/>
+<address addr="10.74.130.252" addrtype="ipv4"/>
+<hostnames>
+</hostnames>
+<ports><extraports state="closed" count="998">
+<extrareasons reason="reset" count="996" proto="tcp" ports="1-134,136,138,140-444,446-1000"/>
+<extrareasons reason="port-unreach" count="2" proto="udp" ports="53,161"/>
+</extraports>
+<port protocol="tcp" portid="135"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="msrpc" product="Microsoft Windows RPC" ostype="Windows" method="probed" conf="10"><cpe>cpe:/o:microsoft:windows</cpe></service></port>
+<port protocol="tcp" portid="137"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="netbios-ns" method="table" conf="3"/></port>
+<port protocol="tcp" portid="139"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="netbios-ssn" product="Microsoft Windows netbios-ssn" ostype="Windows" method="probed" conf="10"><cpe>cpe:/o:microsoft:windows</cpe></service></port>
+<port protocol="tcp" portid="445"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="microsoft-ds" method="table" conf="3"/></port>
+<port protocol="tcp" portid="1883"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="mosquitto version 1.6.15" method="probed" conf="10"/><script id="mqtt-subscribe" output="&#xa;  Topics and their most recent payloads: &#xa;    $SYS/broker/load/bytes/received/5min: 2.64&#xa;    $SYS/broker/version: mosquitto version 1.6.15&#xa;    $SYS/broker/load/bytes/sent/15min: 13.15&#xa;    $SYS/broker/load/connections/1min: 0.21&#xa;    $SYS/broker/load/messages/sent/1min: 0.21&#xa;    $SYS/broker/uptime: 2596 seconds&#xa;    $SYS/broker/load/bytes/sent/5min: 0.71&#xa;    $SYS/broker/load/messages/received/1min: 0.21&#xa;    $SYS/broker/load/sockets/1min: 0.21&#xa;    $SYS/broker/load/bytes/received/1min: 3.79&#xa;    $SYS/broker/load/bytes/sent/1min: 0.84&#xa;    $SYS/broker/store/messages/bytes: 180&#xa;    $SYS/broker/load/bytes/received/15min: 1.35"><table key="Topics and their most recent payloads">
+<elem key="$SYS/broker/load/bytes/received/5min">2.64</elem>
+<elem key="$SYS/broker/version">mosquitto version 1.6.15</elem>
+<elem key="$SYS/broker/load/bytes/sent/15min">13.15</elem>
+<elem key="$SYS/broker/load/connections/1min">0.21</elem>
+<elem key="$SYS/broker/load/messages/sent/1min">0.21</elem>
+<elem key="$SYS/broker/uptime">2596 seconds</elem>
+<elem key="$SYS/broker/load/bytes/sent/5min">0.71</elem>
+<elem key="$SYS/broker/load/messages/received/1min">0.21</elem>
+<elem key="$SYS/broker/load/sockets/1min">0.21</elem>
+<elem key="$SYS/broker/load/bytes/received/1min">3.79</elem>
+<elem key="$SYS/broker/load/bytes/sent/1min">0.84</elem>
+<elem key="$SYS/broker/store/messages/bytes">180</elem>
+<elem key="$SYS/broker/load/bytes/received/15min">1.35</elem>
+</table>
+</script></port>
+<port protocol="tcp" portid="2121"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="ftp" product="vsftpd" version="2.3.4" ostype="Unix" method="probed" conf="10"><cpe>cpe:/a:vsftpd:vsftpd:2.3.4</cpe></service></port>
+<port protocol="tcp" portid="2222"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="ssh" product="OpenSSH" version="8.9p1 Ubuntu 3ubuntu0.6" extrainfo="Ubuntu Linux; protocol 2.0" ostype="Linux" method="probed" conf="10"><cpe>cpe:/a:openbsd:openssh:8.9p1</cpe><cpe>cpe:/o:linux:linux_kernel</cpe></service></port>
+<port protocol="tcp" portid="2323"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="telnet" product="BusyBox telnetd" version="1.14.0 or later" servicefp="SF-Port2323-TCP:V=7.993%I=7%D=11/7%Time=6AEF59C8%P=i686-pc-windows-windows%r(NULL,1D,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\nlab-iot\x20login:\x20&quot;)%r(tn3270,1D,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\nlab-iot\x20login:\x20&quot;);" method="table" conf="3"><cpe>cpe:/a:busybox:busybox</cpe></service><script id="fingerprint-strings" output="&#xa;  NULL, tn3270: &#xa;    lab-iot login:"><elem key="NULL, tn3270">&#xa;    lab-iot login:</elem>
+</script></port>
+<port protocol="tcp" portid="6379"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="redis" product="Redis key-value store" version="7.2.17" method="probed" conf="10"><cpe>cpe:/a:redislabs:redis:7.2.17</cpe></service></port>
+<port protocol="tcp" portid="8080"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="http" product="nginx" version="1.27.5" method="probed" conf="10"><cpe>cpe:/a:igor_sysoev:nginx:1.27.5</cpe></service><script id="http-title" output="Admin Login"><elem key="title">Admin Login</elem>
+</script><script id="http-server-header" output="nginx/1.27.5"><elem>nginx/1.27.5</elem>
+</script></port>
+<port protocol="udp" portid="123"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="ntp" method="table" conf="3"/></port>
+<port protocol="udp" portid="1900"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="upnp" method="table" conf="3"/></port>
+<port protocol="udp" portid="5353"><state state="open|filtered" reason="no-response" reason_ttl="0"/><service name="zeroconf" method="table" conf="3"/></port>
+</ports>
+<times srtt="264" rttvar="417" to="100000"/>
+</host>
+<runstats><finished time="1794071088" timestr="Sat Nov  7 19:04:48 2026" summary="Nmap done at Sat Nov  7 19:04:48 2026; 256 IP addresses (3 hosts up) scanned in 1518.31 seconds" elapsed="1518.31" exit="success"/><hosts up="3" down="253" total="256"/>
+</runstats>
+</nmaprun>
