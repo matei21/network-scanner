@@ -25,9 +25,9 @@ def test_validation_set_matches_answer_key(tmp_path):
     export.write_scores_csv(results, tmp_path / "scores.csv")
 
     got = _rows(tmp_path / "findings.csv")
-    expected = _rows(TESTS_DIR / "expected_validation_findings.csv")
+    expected = _rows(TESTS_DIR / "expected_findings.csv")
     missing = set(expected) - set(got)
     extra = set(got) - set(expected)
     assert not missing and not extra, f"missing={sorted(missing)} extra={sorted(extra)}"
 
-    assert _rows(tmp_path / "scores.csv") == _rows(TESTS_DIR / "expected_validation_scores.csv")
+    assert _rows(tmp_path / "scores.csv") == _rows(TESTS_DIR / "expected_scores.csv")
