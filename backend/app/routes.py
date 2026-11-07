@@ -1,6 +1,7 @@
 import logging
 import shutil
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -88,10 +89,23 @@ def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source
     return data
 
 
+def _local_date(timestamp: str) -> str:
+    """'2026-11-07T18:07:01+00:00' -> '2026-11-07 20:07' in the laptop's time zone."""
+    return datetime.fromisoformat(timestamp).astimezone().strftime("%Y-%m-%d %H:%M")
+
+
 def _score_history(source: str) -> list[dict]:
     """Score trend, oldest first (FR-10). Only scans of the same source, so test files never mix with our network."""
+    counts = db.count_findings()
     return [
-        {"scan_id": s["id"], "file": s["filename"], "timestamp": s["timestamp"], "score": s["network_score"]}
+        {
+            "scan_id": s["id"],
+            "file": s["filename"],
+            "timestamp": s["timestamp"],
+            "date": _local_date(s["timestamp"]),
+            "score": s["network_score"],
+            "findings_count": counts.get(s["id"], 0),
+        }
         for s in reversed(db.get_all_scans(source))
     ]
 
