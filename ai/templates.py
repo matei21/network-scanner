@@ -532,4 +532,3 @@ def get_template(finding_code, language="ro"):
 def get_all_finding_codes():
     """Returneaza lista tuturor codurilor de findings disponibile."""
     return list(FINDING_TEMPLATES.keys())
->>>>>>> 768be71 (Add AI module: templates, fingerprinting, AI service with 3-level fallback)
