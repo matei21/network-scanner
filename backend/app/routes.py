@@ -105,6 +105,23 @@ async def upload_xml(file: UploadFile, source: Source = "real"):
     return _store(result, result.file, xml_path, source)
 
 
+@router.get("/scan/latest")
+def get_latest_scan():
+    """Return the most recently uploaded/scanned result (what the UI loads on open)."""
+    scans = db.get_all_scans(None)
+    if not scans:
+        raise HTTPException(404, "No scans yet. Upload an XML file or run a live scan.")
+    latest = scans[0]
+    data = db.get_snapshot(latest["id"])
+    if data is None:
+        raise HTTPException(404, "Latest scan has no stored snapshot.")
+    data["scan_id"] = latest["id"]
+    data["timestamp"] = latest["timestamp"]
+    data["source"] = latest["source"]
+    data["history"] = _score_history(latest["source"])
+    return data
+
+
 @router.get("/scan/{scan_id}")
 def get_full_scan(scan_id: int):
     """A past scan in the same format as /upload, so the UI can show it as if it was just scanned."""
@@ -236,23 +253,6 @@ def delete_history():
 @router.post("/scan/upload")
 async def upload_xml_alias(file: UploadFile, source: Source = "real"):
     return await upload_xml(file, source)
-
-
-@router.get("/scan/latest")
-def get_latest_scan():
-    """Return the most recently uploaded/scanned result (what the UI loads on open)."""
-    scans = db.get_all_scans(None)
-    if not scans:
-        raise HTTPException(404, "No scans yet. Upload an XML file or run a live scan.")
-    latest = scans[0]
-    data = db.get_snapshot(latest["id"])
-    if data is None:
-        raise HTTPException(404, "Latest scan has no stored snapshot.")
-    data["scan_id"] = latest["id"]
-    data["timestamp"] = latest["timestamp"]
-    data["source"] = latest["source"]
-    data["history"] = _score_history(latest["source"])
-    return data
 
 
 @router.post("/scan/live")
