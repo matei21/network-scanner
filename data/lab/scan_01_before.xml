@@ -9,13 +9,13 @@
 <debugging level="0"/>
 <hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.74.130.9" addrtype="ipv4"/>
-<address addr="1C:1B:B5:D7:04:42" addrtype="mac" vendor="Intel Corporate"/>
+<address addr="1C:1B:**:**:**:**" addrtype="mac" vendor="Intel Corporate"/>
 <hostnames>
 </hostnames>
 </hosthint>
 <hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.74.130.53" addrtype="ipv4"/>
-<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<address addr="AE:B3:**:**:**:**" addrtype="mac"/>
 <hostnames>
 </hostnames>
 </hosthint>
@@ -26,7 +26,7 @@
 <taskprogress task="Service scan" time="1794070913" percent="50.00" remaining="62" etc="1794070975"/>
 <host starttime="1794069579" endtime="1794070966"><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.74.130.9" addrtype="ipv4"/>
-<address addr="1C:1B:B5:D7:04:42" addrtype="mac" vendor="Intel Corporate"/>
+<address addr="1C:1B:**:**:**:**" addrtype="mac" vendor="Intel Corporate"/>
 <hostnames>
 </hostnames>
 <ports><extraports state="filtered" count="1005">
@@ -43,7 +43,7 @@
 </host>
 <host starttime="1794069579" endtime="1794070965"><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.74.130.53" addrtype="ipv4"/>
-<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<address addr="AE:B3:**:**:**:**" addrtype="mac"/>
 <hostnames>
 </hostnames>
 <ports><extraports state="closed" count="1009">

@@ -49,6 +49,9 @@ results/*
 Thumbs.db
 
 # Scan data (poate contine MAC-uri reale)
+# Raw live scans (unmasked MACs) are never committed; "delete my history" erases them.
 scans/
 *.xml
-!validation_set/**/*.xml
+# Allowed: Validation / Test Set files and our lab scans (MACs masked: python lab/mask_macs.py data/lab;
+# tests/test_privacy_fixtures.py fails if a lab scan still has a full MAC).
+!data/**/*.xml

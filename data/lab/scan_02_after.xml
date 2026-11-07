@@ -9,13 +9,13 @@
 <debugging level="0"/>
 <hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.74.130.53" addrtype="ipv4"/>
-<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<address addr="AE:B3:**:**:**:**" addrtype="mac"/>
 <hostnames>
 </hostnames>
 </hosthint>
 <host starttime="1794071376" endtime="1794071394"><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.74.130.53" addrtype="ipv4"/>
-<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<address addr="AE:B3:**:**:**:**" addrtype="mac"/>
 <hostnames>
 </hostnames>
 <ports><extraports state="closed" count="1009">
