@@ -2,7 +2,7 @@
 # Run on the TARGET laptop only, connected only to the RSH-<team name> hotspot.
 #
 #   docker compose up -d                  # start all targets  (before scan)
-#   docker compose stop redis banners     # "fix" 4 findings   (after scan)
+#   docker compose stop redis banners     # "fix" 5 findings   (after scan)
 #   docker compose down                   # turn everything off when you leave
 #
 # Golden rule: simulate, do not expose. No real data, shells or passwords here.
@@ -27,11 +27,25 @@ services:
     volumes: ["./admin:/usr/share/nginx/html:ro"]
     restart: "no"
 
-  # TELNET_OPEN (port 2323) + FTP_CLEARTEXT and OUTDATED_SERVICE (port 2121)
+  # TELNET_OPEN (2323) + FTP_CLEARTEXT and OUTDATED_SERVICE (2121) + SSH_OPEN (2222)
   # Fake banners only: nothing is ever executed, every login is refused.
   banners:
     image: python:3.12-alpine
-    ports: ["2323:2323", "2121:2121"]
+    ports: ["2323:2323", "2121:2121", "2222:2222"]
+    volumes: ["./fake_banners.py:/app/fake_banners.py:ro"]
+    command: ["python", "-u", "/app/fake_banners.py"]
+    restart: "no"
+
+  # OPTIONAL buffer for a setup that already has its own fake telnet on 2323:
+  # only the fake FTP (2121) and fake SSH (2222). Not started by "up -d";
+  # start it alone with:  docker compose --profile buffer up -d buffer
+  # Do not run it together with "banners" (same ports).
+  buffer:
+    profiles: ["buffer"]
+    image: python:3.12-alpine
+    ports: ["2121:2121", "2222:2222"]
+    environment:
+      TELNET_PORT: "0"
     volumes: ["./fake_banners.py:/app/fake_banners.py:ro"]
     command: ["python", "-u", "/app/fake_banners.py"]
     restart: "no"

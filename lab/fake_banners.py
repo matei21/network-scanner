@@ -2,12 +2,15 @@
 
   port 2323 -> looks like BusyBox telnetd   => TELNET_OPEN
   port 2121 -> looks like vsftpd 2.3.4      => FTP_CLEARTEXT + OUTDATED_SERVICE
+  port 2222 -> looks like OpenSSH 8.9p1     => SSH_OPEN (info, 0 points)
 
 Golden rule: simulate, do not expose. These listeners only send text.
 Nothing is executed, no files exist, every login attempt is refused.
 
 Run:  python fake_banners.py            (inside Docker this is automatic)
-Env:  BANNER_HOST (default 0.0.0.0), TELNET_PORT (2323), FTP_PORT (2121)
+Env:  BANNER_HOST (default 0.0.0.0), TELNET_PORT (2323), FTP_PORT (2121),
+      SSH_PORT (2222). Set a port to 0 to turn that fake service off
+      (e.g. TELNET_PORT=0 if you already run another fake telnet).
 """
 
 from __future__ import annotations
@@ -18,6 +21,7 @@ import os
 HOST = os.environ.get("BANNER_HOST", "0.0.0.0")
 TELNET_PORT = int(os.environ.get("TELNET_PORT", "2323"))
 FTP_PORT = int(os.environ.get("FTP_PORT", "2121"))
+SSH_PORT = int(os.environ.get("SSH_PORT", "2222"))
 
 IDLE_TIMEOUT = 15      # seconds before an idle client is dropped
 MAX_LINES = 10         # max commands per connection
@@ -88,12 +92,36 @@ async def handle_ftp(reader: asyncio.StreamReader, writer: asyncio.StreamWriter)
         await _close(writer)
 
 
+async def handle_ssh(reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
+    """Send an OpenSSH version line, read the client's line, then hang up.
+    No key exchange happens, so nobody can ever log in."""
+    try:
+        writer.write(b"SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6\r\n")
+        await writer.drain()
+        await _readline(reader)
+    except ConnectionError:
+        pass
+    finally:
+        await _close(writer)
+
+
 async def main() -> None:
-    telnet = await asyncio.start_server(handle_telnet, HOST, TELNET_PORT)
-    ftp = await asyncio.start_server(handle_ftp, HOST, FTP_PORT)
-    print(f"fake telnet on {HOST}:{TELNET_PORT}, fake ftp on {HOST}:{FTP_PORT}")
-    async with telnet, ftp:
-        await asyncio.gather(telnet.serve_forever(), ftp.serve_forever())
+    services = [
+        ("fake telnet", handle_telnet, TELNET_PORT),
+        ("fake ftp", handle_ftp, FTP_PORT),
+        ("fake ssh", handle_ssh, SSH_PORT),
+    ]
+    servers = []
+    for name, handler, port in services:
+        if port == 0:
+            print(f"{name}: off")
+            continue
+        servers.append(await asyncio.start_server(handler, HOST, port))
+        print(f"{name} on {HOST}:{port}")
+    if not servers:
+        print("all fake services are off")
+        return
+    await asyncio.gather(*(s.serve_forever() for s in servers))
 
 
 if __name__ == "__main__":

@@ -56,7 +56,7 @@ $outDir = Join-Path $PSScriptRoot "..\data\lab"
 New-Item -ItemType Directory -Force $outDir | Out-Null
 $outFile = Join-Path $outDir "$Name.xml"
 
-$ports = "T:1-1000,1883,2121,2323,6379,8080,U:53,123,161,1900,5353"
+$ports = "T:1-1000,1883,2121,2222,2323,6379,8080,U:53,123,161,1900,5353"
 Write-Host "Scanning $Subnet -> $outFile (this takes a few minutes)"
 nmap -sS -sU -sV --script http-title --max-rate 100 -p $ports -oX $outFile $Subnet
 
