@@ -5,9 +5,9 @@
 /* --- Garden theme (single, one font family) -------------------------- */
 :root {
   /* Palette tuned to the cartoon landscape (sky blue + meadow green). */
-  --bg-card: rgba(255, 255, 255, 0.95);         /* cloud-white, nearly solid */
-  --bg-card-green: rgba(230, 243, 215, 0.92);   /* light meadow */
-  --bg-raised: rgba(240, 248, 225, 0.92);
+  --bg-card: rgba(255, 255, 255, 0.7);         /* cloud-white, nearly solid */
+  --bg-card-green: rgba(230, 243, 215, 0.7);   /* light meadow */
+  --bg-raised: rgba(240, 248, 225, 0.7);
   --text-primary: #1A2E1E;
   --text-muted: #4E5F4C;
   --accent: #4A8A52;                             /* fresh grass green */
@@ -19,14 +19,14 @@
   --border-strong: #4A8A52;
   --focus-ring: #4A8A52;
 
-  /* Severity (for score hero + findings — SOLID, not transparent) */
-  --severity-safe-bg: #C8E6C9;
+  /* Severity (for score hero + findings) */
+  --severity-safe-bg: rgba(200, 230, 201, 0.8);
   --severity-safe-text: #1B5E20;
   --severity-safe-ring: #2E7D32;
-  --severity-watch-bg: #FFE0A3;
+  --severity-watch-bg: rgba(255, 224, 163, 0.8);
   --severity-watch-text: #7A4F0B;
   --severity-watch-ring: #B45309;
-  --severity-risk-bg: #F8C9C9;
+  --severity-risk-bg: rgba(248, 201, 201, 0.8);
   --severity-risk-text: #8F1D1D;
   --severity-risk-ring: #B91C1C;
 
@@ -96,6 +96,38 @@ h1, h2, h3, h4 {
   color: var(--text-primary) !important;
 }
 
+/* Finding cards (probleme) — glass effect to match the garden theme */
+.bg-red-200,
+.bg-amber-200,
+.bg-blue-200,
+.bg-gray-200 {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+.bg-red-200 {
+  background-color: rgba(248, 201, 201, 0.7) !important;
+}
+.bg-amber-200 {
+  background-color: rgba(255, 224, 163, 0.7) !important;
+}
+.bg-blue-200 {
+  background-color: rgba(191, 219, 254, 0.7) !important;
+}
+.bg-gray-200 {
+  background-color: rgba(229, 231, 235, 0.7) !important;
+}
+
+/* Fix-steps panel ("Cum rezolvi") inside a finding — more transparent
+   so the severity color shows through the inner panel too */
+.bg-red-200 .bg-white,
+.bg-amber-200 .bg-white,
+.bg-blue-200 .bg-white,
+.bg-gray-200 .bg-white {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
 /* Primary accent — forest green replaces Tailwind blue-700 */
 .bg-blue-700 {
   background-color: var(--accent) !important;
@@ -116,8 +148,8 @@ h1, h2, h3, h4 {
 
 /* --- Hero (score) card: SOLID severity colour per verdict ------------- */
 .hero-card {
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 2px solid var(--border);
   box-shadow: 0 10px 28px rgba(40, 30, 10, 0.12);
 }
@@ -267,7 +299,7 @@ header.app-menubar [role="tab"][aria-selected="true"] .tab-count {
   z-index: 40;
   width: min(380px, calc(100vw - 2.5rem));
   max-height: 60vh;
-  background-color: var(--bg-card);
+  background-color: rgba(255, 255, 255, 0.75);
   border: 2px solid var(--border);
   border-radius: 1rem;
   box-shadow: 0 16px 48px rgba(40, 30, 10, 0.25);
