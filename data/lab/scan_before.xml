@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///C:/Program Files (x86)/Nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.993 scan initiated Sat Nov  7 17:06:24 2026 as: &quot;C:\\Program Files (x86)\\Nmap\\nmap.exe&quot; -sS -sV -p 21,23,80,1883,2323,6379,8080 -oX D:\\sh2026\\network-scanner\\data\\lab\\scan_before.xml 10.74.130.0/24 -->
+<nmaprun scanner="nmap" args="&quot;C:\\Program Files (x86)\\Nmap\\nmap.exe&quot; -sS -sV -p 21,23,80,1883,2323,6379,8080 -oX D:\\sh2026\\network-scanner\\data\\lab\\scan_before.xml 10.74.130.0/24" start="1794063984" startstr="Sat Nov  7 17:06:24 2026" version="7.993" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="7" services="21,23,80,1883,2323,6379,8080"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.53" addrtype="ipv4"/>
+<address addr="6E:DD:51:DB:18:2C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<host starttime="1794063991" endtime="1794063991"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.53" addrtype="ipv4"/>
+<address addr="6E:DD:51:DB:18:2C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="21"><state state="closed" reason="reset" reason_ttl="64"/><service name="ftp" method="table" conf="3"/></port>
+<port protocol="tcp" portid="23"><state state="closed" reason="reset" reason_ttl="64"/><service name="telnet" method="table" conf="3"/></port>
+<port protocol="tcp" portid="80"><state state="closed" reason="reset" reason_ttl="64"/><service name="http" method="table" conf="3"/></port>
+<port protocol="tcp" portid="1883"><state state="closed" reason="reset" reason_ttl="64"/><service name="mqtt" method="table" conf="3"/></port>
+<port protocol="tcp" portid="2323"><state state="closed" reason="reset" reason_ttl="64"/><service name="3d-nfsd" method="table" conf="3"/></port>
+<port protocol="tcp" portid="6379"><state state="closed" reason="reset" reason_ttl="64"/><service name="redis" method="table" conf="3"/></port>
+<port protocol="tcp" portid="8080"><state state="closed" reason="reset" reason_ttl="64"/><service name="http-proxy" method="table" conf="3"/></port>
+</ports>
+<times srtt="29276" rttvar="24191" to="126040"/>
+</host>
+<host starttime="1794063991" endtime="1794064005"><status state="up" reason="localhost-response" reason_ttl="0"/>
+<address addr="10.74.130.252" addrtype="ipv4"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="21"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="ftp" product="vsftpd" version="3.0.2" ostype="Unix" method="probed" conf="10"><cpe>cpe:/a:vsftpd:vsftpd:3.0.2</cpe></service></port>
+<port protocol="tcp" portid="23"><state state="closed" reason="reset" reason_ttl="128"/><service name="telnet" method="table" conf="3"/></port>
+<port protocol="tcp" portid="80"><state state="closed" reason="reset" reason_ttl="128"/><service name="http" method="table" conf="3"/></port>
+<port protocol="tcp" portid="1883"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="mosquitto version 1.6.15" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="2323"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="3d-nfsd" servicefp="SF-Port2323-TCP:V=7.993%I=7%D=11/7%Time=6AEF3E77%P=i686-pc-windows-windows%r(NULL,10,&quot;BusyBox\x20telnetd\n&quot;)%r(tn3270,10,&quot;BusyBox\x20telnetd\n&quot;)%r(GenericLines,10,&quot;BusyBox\x20telnetd\n&quot;)%r(GetRequest,10,&quot;BusyBox\x20telnetd\n&quot;)%r(HTTPOptions,10,&quot;BusyBox\x20telnetd\n&quot;)%r(RTSPRequest,10,&quot;BusyBox\x20telnetd\n&quot;)%r(RPCCheck,10,&quot;BusyBox\x20telnetd\n&quot;)%r(DNSVersionBindReqTCP,10,&quot;BusyBox\x20telnetd\n&quot;)%r(DNSStatusRequestTCP,10,&quot;BusyBox\x20telnetd\n&quot;)%r(Help,10,&quot;BusyBox\x20telnetd\n&quot;)%r(SSLSessionReq,10,&quot;BusyBox\x20telnetd\n&quot;)%r(TerminalServerCookie,10,&quot;BusyBox\x20telnetd\n&quot;)%r(TLSSessionReq,10,&quot;BusyBox\x20telnetd\n&quot;)%r(Kerberos,10,&quot;BusyBox\x20telnetd\n&quot;)%r(SMBProgNeg,10,&quot;BusyBox\x20telnetd\n&quot;)%r(X11Probe,10,&quot;BusyBox\x20telnetd\n&quot;)%r(FourOhFourRequest,10,&quot;BusyBox\x20telnetd\n&quot;)%r(LPDString,10,&quot;BusyBox\x20telnetd\n&quot;)%r(LDAPSearchReq,10,&quot;BusyBox\x20telnetd\n&quot;)%r(LDAPBindReq,10,&quot;BusyBox\x20telnetd\n&quot;)%r(SIPOptions,10,&quot;BusyBox\x20telnetd\n&quot;)%r(LANDesk-RC,10,&quot;BusyBox\x20telnetd\n&quot;)%r(TerminalServer,10,&quot;BusyBox\x20telnetd\n&quot;)%r(NCP,10,&quot;BusyBox\x20telnetd\n&quot;)%r(NotesRPC,10,&quot;BusyBox\x20telnetd\n&quot;)%r(JavaRMI,10,&quot;BusyBox\x20telnetd\n&quot;)%r(WMSRequest,10,&quot;BusyBox\x20telnetd\n&quot;)%r(oracle-tns,10,&quot;BusyBox\x20telnetd\n&quot;)%r(ms-sql-s,10,&quot;BusyBox\x20telnetd\n&quot;)%r(afp,10,&quot;BusyBox\x20telnetd\n&quot;)%r(giop,10,&quot;BusyBox\x20telnetd\n&quot;);" method="table" conf="3"/></port>
+<port protocol="tcp" portid="6379"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="redis" product="Redis key-value store" version="8.10.3" method="probed" conf="10"><cpe>cpe:/a:redislabs:redis:8.10.3</cpe></service></port>
+<port protocol="tcp" portid="8080"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="http" product="nginx" version="1.31.8" method="probed" conf="10"><cpe>cpe:/a:igor_sysoev:nginx:1.31.8</cpe></service></port>
+</ports>
+<times srtt="3395" rttvar="2883" to="100000"/>
+</host>
+<runstats><finished time="1794064005" timestr="Sat Nov  7 17:06:45 2026" summary="Nmap done at Sat Nov  7 17:06:45 2026; 256 IP addresses (2 hosts up) scanned in 21.14 seconds" elapsed="21.14" exit="success"/><hosts up="2" down="254" total="256"/>
+</runstats>
+</nmaprun>

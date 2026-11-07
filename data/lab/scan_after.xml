@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///C:/Program Files (x86)/Nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.993 scan initiated Sat Nov  7 17:08:04 2026 as: &quot;C:\\Program Files (x86)\\Nmap\\nmap.exe&quot; -sS -sV -p 21,23,80,1883,2323,6379,8080 -oX D:\\sh2026\\network-scanner\\data\\lab\\scan_after.xml 10.74.130.0/24 -->
+<nmaprun scanner="nmap" args="&quot;C:\\Program Files (x86)\\Nmap\\nmap.exe&quot; -sS -sV -p 21,23,80,1883,2323,6379,8080 -oX D:\\sh2026\\network-scanner\\data\\lab\\scan_after.xml 10.74.130.0/24" start="1794064084" startstr="Sat Nov  7 17:08:04 2026" version="7.993" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="7" services="21,23,80,1883,2323,6379,8080"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.9" addrtype="ipv4"/>
+<address addr="1C:1B:B5:D7:04:42" addrtype="mac" vendor="Intel Corporate"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.53" addrtype="ipv4"/>
+<address addr="6E:DD:51:DB:18:2C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<host starttime="1794064089" endtime="1794064091"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.9" addrtype="ipv4"/>
+<address addr="1C:1B:B5:D7:04:42" addrtype="mac" vendor="Intel Corporate"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="21"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="ftp" method="table" conf="3"/></port>
+<port protocol="tcp" portid="23"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="telnet" method="table" conf="3"/></port>
+<port protocol="tcp" portid="80"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="http" method="table" conf="3"/></port>
+<port protocol="tcp" portid="1883"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="mqtt" method="table" conf="3"/></port>
+<port protocol="tcp" portid="2323"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="3d-nfsd" method="table" conf="3"/></port>
+<port protocol="tcp" portid="6379"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="redis" method="table" conf="3"/></port>
+<port protocol="tcp" portid="8080"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="http-proxy" method="table" conf="3"/></port>
+</ports>
+<times srtt="67375" rttvar="71500" to="353375"/>
+</host>
+<host starttime="1794064089" endtime="1794064089"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.53" addrtype="ipv4"/>
+<address addr="6E:DD:51:DB:18:2C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="21"><state state="closed" reason="reset" reason_ttl="64"/><service name="ftp" method="table" conf="3"/></port>
+<port protocol="tcp" portid="23"><state state="closed" reason="reset" reason_ttl="64"/><service name="telnet" method="table" conf="3"/></port>
+<port protocol="tcp" portid="80"><state state="closed" reason="reset" reason_ttl="64"/><service name="http" method="table" conf="3"/></port>
+<port protocol="tcp" portid="1883"><state state="closed" reason="reset" reason_ttl="64"/><service name="mqtt" method="table" conf="3"/></port>
+<port protocol="tcp" portid="2323"><state state="closed" reason="reset" reason_ttl="64"/><service name="3d-nfsd" method="table" conf="3"/></port>
+<port protocol="tcp" portid="6379"><state state="closed" reason="reset" reason_ttl="64"/><service name="redis" method="table" conf="3"/></port>
+<port protocol="tcp" portid="8080"><state state="closed" reason="reset" reason_ttl="64"/><service name="http-proxy" method="table" conf="3"/></port>
+</ports>
+<times srtt="26876" rttvar="16116" to="100000"/>
+</host>
+<host starttime="1794064091" endtime="1794064104"><status state="up" reason="localhost-response" reason_ttl="0"/>
+<address addr="10.74.130.252" addrtype="ipv4"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="21"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="ftp" product="vsftpd" version="3.0.2" ostype="Unix" method="probed" conf="10"><cpe>cpe:/a:vsftpd:vsftpd:3.0.2</cpe></service></port>
+<port protocol="tcp" portid="23"><state state="closed" reason="reset" reason_ttl="128"/><service name="telnet" method="table" conf="3"/></port>
+<port protocol="tcp" portid="80"><state state="closed" reason="reset" reason_ttl="128"/><service name="http" method="table" conf="3"/></port>
+<port protocol="tcp" portid="1883"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="mosquitto version 1.6.15" method="probed" conf="10"/></port>
+<port protocol="tcp" portid="2323"><state state="closed" reason="reset" reason_ttl="128"/><service name="3d-nfsd" method="table" conf="3"/></port>
+<port protocol="tcp" portid="6379"><state state="closed" reason="reset" reason_ttl="128"/><service name="redis" method="table" conf="3"/></port>
+<port protocol="tcp" portid="8080"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="http" product="nginx" version="1.31.8" method="probed" conf="10"><cpe>cpe:/a:igor_sysoev:nginx:1.31.8</cpe></service></port>
+</ports>
+<times srtt="765" rttvar="1295" to="100000"/>
+</host>
+<runstats><finished time="1794064104" timestr="Sat Nov  7 17:08:24 2026" summary="Nmap done at Sat Nov  7 17:08:24 2026; 256 IP addresses (3 hosts up) scanned in 20.55 seconds" elapsed="20.55" exit="success"/><hosts up="3" down="253" total="256"/>
+</runstats>
+</nmaprun>
