@@ -311,3 +311,75 @@ header.app-menubar [role="tab"][aria-selected="true"] .tab-count {
 footer {
   color: var(--text-muted) !important;
 }
+
+
+/* --- Summary card (ia culoarea severitatii, ca hero) ---------------- */
+.summary-card {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid var(--border);
+  box-shadow: 0 6px 18px rgba(40, 30, 10, 0.08);
+}
+.summary-card[data-verdict="safe"] {
+  background-color: var(--severity-safe-bg) !important;
+  border-color: var(--severity-safe-ring) !important;
+}
+.summary-card[data-verdict="watch"] {
+  background-color: var(--severity-watch-bg) !important;
+  border-color: var(--severity-watch-ring) !important;
+}
+.summary-card[data-verdict="at_risk"] {
+  background-color: var(--severity-risk-bg) !important;
+  border-color: var(--severity-risk-ring) !important;
+}
+.summary-card[data-verdict="error"] {
+  background-color: var(--bg-card) !important;
+}
+
+/* --- Network map: parchment-style treasure map backdrop -------------- */
+.network-map {
+  background-color: transparent;
+  border: none !important;
+  position: relative;
+}
+.network-map::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("/map-parchment.png");
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  opacity: 0.75;
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* --- Device detail modal: same severity palette as hero + summary ---- */
+.device-modal {
+  background-color: var(--bg-card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 2px solid var(--border);
+}
+.device-modal[data-verdict="safe"] {
+  background-color: var(--severity-safe-bg) !important;
+  border-color: var(--severity-safe-ring) !important;
+}
+.device-modal[data-verdict="watch"] {
+  background-color: var(--severity-watch-bg) !important;
+  border-color: var(--severity-watch-ring) !important;
+}
+.device-modal[data-verdict="at_risk"] {
+  background-color: var(--severity-risk-bg) !important;
+  border-color: var(--severity-risk-ring) !important;
+}
+
+.device-modal[data-verdict="attention"] {
+  background-color: rgba(191, 219, 254, 0.8) !important;
+  border-color: #1D4ED8 !important;
+}
+.device-modal[data-verdict="info"] {
+  background-color: rgba(229, 231, 235, 0.85) !important;
+  border-color: #6B7280 !important;
+}
