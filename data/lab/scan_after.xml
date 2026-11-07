@@ -8,13 +8,13 @@
 <debugging level="0"/>
 <hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.74.130.53" addrtype="ipv4"/>
-<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<address addr="AE:B3:**:**:**:**" addrtype="mac"/>
 <hostnames>
 </hostnames>
 </hosthint>
 <host starttime="1794067032" endtime="1794067032"><status state="up" reason="arp-response" reason_ttl="0"/>
 <address addr="10.74.130.53" addrtype="ipv4"/>
-<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<address addr="AE:B3:**:**:**:**" addrtype="mac"/>
 <hostnames>
 </hostnames>
 <ports><port protocol="tcp" portid="21"><state state="closed" reason="reset" reason_ttl="64"/><service name="ftp" method="table" conf="3"/></port>
