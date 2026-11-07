@@ -21,6 +21,20 @@ tests/      pytest + raspunsurile asteptate pentru Validation Set
 results/    findings.csv + scores.csv generate (nu se editeaza manual)
 ```
 
+## No secrets (NFR-01, live check 7)
+
+Keys and passwords live only in a local `.env` (ignored by git); `.env.example`
+files contain placeholders only. Check the whole repository, every commit on
+every branch, with [gitleaks](https://github.com/gitleaks/gitleaks):
+
+```bash
+winget install --id Gitleaks.Gitleaks -e
+gitleaks git --log-opts="--all" --redact -v .
+```
+
+Expected result: `no leaks found` (exit code 0). Last run: 23 commits, all
+branches, no leaks.
+
 
 
 Etapele in ordine
