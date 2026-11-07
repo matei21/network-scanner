@@ -98,3 +98,24 @@ export async function askAssistant(question, scanId) {
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
+
+export async function narrateScan(scanId, language = "ro") {
+  if (USE_MOCK) {
+    await sleep(300);
+    return {
+      narrative:
+        "Reteaua ta are 4 dispozitive si un scor de securitate de 40/100.\nAm gasit 5 probleme de securitate (2 critice).\n\nCele mai grave probleme:\n  - camera de supraveghere (192.168.1.40): Camera video transmite imagini accesibile oricui din retea.\n\nRecomandare: incepe cu CAMERA_STREAM_EXPOSED pe 192.168.1.40 -- aceasta e cea mai urgenta.",
+      total_devices: 4,
+      total_findings: 5,
+      high_count: 2,
+      medium_count: 3,
+      score: 40,
+    };
+  }
+  const url = scanId
+    ? `/api/assistant/narrate/${encodeURIComponent(scanId)}?language=${language}`
+    : `/api/assistant/narrate?language=${language}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}

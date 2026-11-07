@@ -29,11 +29,11 @@ every branch, with [gitleaks](https://github.com/gitleaks/gitleaks):
 
 ```bash
 winget install --id Gitleaks.Gitleaks -e
-gitleaks git --log-opts="--all" --redact -v .
+gitleaks detect --source . --verbose
 ```
 
-Expected result: `no leaks found` (exit code 0). Last run: 23 commits, all
-branches, no leaks.
+Expected result: `no leaks found` (exit code 0). Last verified: 24 commits,
+no leaks.
 
 
 

@@ -1,3 +1,4 @@
+import logging
 import shutil
 import uuid
 from pathlib import Path
@@ -5,11 +6,15 @@ from typing import Literal
 
 import aiofiles
 from fastapi import APIRouter, HTTPException, UploadFile
+from pydantic import BaseModel
 
 from analyzer import export
 from analyzer.models import ScanResult
 from analyzer.parser import MAX_FILE_BYTES
 from analyzer.service import analyze_file, analyze_folder, to_dict
+
+from ai.assistant import Assistant, enrich_scan_data, narrate_scan, suggest_followups
+from ai.fingerprint import guess_device_type
 
 from . import database as db
 from .guardrails import build_allowlist, detect_network, validate_scan_target
@@ -21,6 +26,8 @@ from .models import (
     ScanRequest,
 )
 from .scanner import run_nmap_scan
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -58,6 +65,7 @@ async def _save_upload(file: UploadFile, folder: Path) -> Path:
 
 def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source) -> dict:
     data = to_dict(result)
+    data = enrich_scan_data(data)
     data["source"] = source
     scan_id = db.save_scan(display_name, result.score, str(xml_path), source)
     db.save_devices(scan_id, [
@@ -206,6 +214,7 @@ def network_info():
 
 
 @router.delete("/history", response_model=DeleteResponse)
+@router.delete("/scans/history", response_model=DeleteResponse)
 def delete_history():
     count = db.delete_all_history()
     # Raw nmap XML holds unmasked MACs and hostnames, so it must go too (NFR-02).
@@ -219,3 +228,115 @@ def delete_history():
                 files += 1
                 entry.unlink()
     return DeleteResponse(deleted=count, message=f"Deleted {count} scan(s), {files} scan file(s) and all associated data.")
+
+
+# ── Frontend-compatible aliases ─────────────────────────────────────
+# Frontend api.js expects these paths; the routes above use shorter names.
+
+@router.post("/scan/upload")
+async def upload_xml_alias(file: UploadFile, source: Source = "real"):
+    return await upload_xml(file, source)
+
+
+@router.get("/scan/latest")
+def get_latest_scan():
+    """Return the most recently uploaded/scanned result (what the UI loads on open)."""
+    scans = db.get_all_scans(None)
+    if not scans:
+        raise HTTPException(404, "No scans yet. Upload an XML file or run a live scan.")
+    latest = scans[0]
+    data = db.get_snapshot(latest["id"])
+    if data is None:
+        raise HTTPException(404, "Latest scan has no stored snapshot.")
+    data["scan_id"] = latest["id"]
+    data["timestamp"] = latest["timestamp"]
+    data["source"] = latest["source"]
+    data["history"] = _score_history(latest["source"])
+    return data
+
+
+@router.post("/scan/live")
+def live_scan_alias(req: ScanRequest):
+    return live_scan(req)
+
+
+@router.get("/scans/history")
+def get_history_alias(source: Literal["real", "test", "all"] = "real"):
+    return get_history(source)
+
+
+# ── AI Assistant endpoint (FR-12) ──────────────────────────────────
+
+class AskRequest(BaseModel):
+    question: str
+    scan_id: int | None = None
+    language: str = "ro"
+
+
+# Keep one Assistant per scan to preserve conversation history within a session.
+_assistants: dict[int, Assistant] = {}
+
+
+def _get_assistant(scan_id: int) -> Assistant:
+    if scan_id in _assistants:
+        return _assistants[scan_id]
+    data = db.get_snapshot(scan_id)
+    if data is None:
+        raise HTTPException(404, "Scan not found or has no snapshot.")
+    assistant = Assistant(data, enable_cloud=False, enable_local=True)
+    _assistants[scan_id] = assistant
+    if len(_assistants) > 20:
+        oldest = next(iter(_assistants))
+        del _assistants[oldest]
+    return assistant
+
+
+@router.post("/assistant/ask")
+def assistant_ask(req: AskRequest):
+    scan_id = req.scan_id
+    if scan_id is None:
+        scans = db.get_all_scans(None)
+        if not scans:
+            raise HTTPException(404, "No scans available.")
+        scan_id = scans[0]["id"]
+
+    assistant = _get_assistant(scan_id)
+    result = assistant.ask(req.question, req.language)
+
+    # Extract cited findings from the scan data for grounding display (NFR-06)
+    cites = []
+    scan_data = db.get_snapshot(scan_id) or {}
+    for device in scan_data.get("devices", []):
+        for finding in device.get("findings", []):
+            code = finding.get("code", "")
+            if code and code.lower() in result["text"].lower():
+                cites.append({
+                    "ip": finding.get("ip", device.get("ip")),
+                    "port": finding.get("port"),
+                    "code": code,
+                })
+
+    followups = suggest_followups(scan_data, result["text"], req.language)
+
+    return {"answer": result["text"], "source": result["source"], "cites": cites, "followups": followups}
+
+
+@router.get("/assistant/narrate/{scan_id}")
+def assistant_narrate(scan_id: int, language: str = "ro"):
+    """Generate a narrative summary of a scan (Scan Narrator feature)."""
+    data = db.get_snapshot(scan_id)
+    if data is None:
+        raise HTTPException(404, "Scan not found or has no snapshot.")
+    return narrate_scan(data, language)
+
+
+@router.get("/assistant/narrate")
+def assistant_narrate_latest(language: str = "ro"):
+    """Narrate the most recent scan."""
+    scans = db.get_all_scans(None)
+    if not scans:
+        raise HTTPException(404, "No scans available.")
+    data = db.get_snapshot(scans[0]["id"])
+    if data is None:
+        raise HTTPException(404, "Latest scan has no snapshot.")
+    return narrate_scan(data, language)

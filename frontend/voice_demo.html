@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="ro">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Voice Demo - Network Scanner</title>
+    <style>
+        :root {
+            --bg: #f8f9fa;
+            --card: #ffffff;
+            --text: #1a1a2e;
+            --accent: #2563eb;
+            --danger: #dc2626;
+            --success: #16a34a;
+            --muted: #6b7280;
+            --border: #e5e7eb;
+            --radius: 12px;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) {
+                --bg: #0f172a;
+                --card: #1e293b;
+                --text: #e2e8f0;
+                --accent: #3b82f6;
+                --danger: #ef4444;
+                --success: #22c55e;
+                --muted: #94a3b8;
+                --border: #334155;
+            }
+        }
+
+        :root[data-theme="dark"] {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --text: #e2e8f0;
+            --accent: #3b82f6;
+            --danger: #ef4444;
+            --success: #22c55e;
+            --muted: #94a3b8;
+            --border: #334155;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            padding: 16px;
+        }
+
+        .container { max-width: 640px; margin: 0 auto; }
+
+        h1 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: var(--muted);
+            margin-bottom: 1.5rem;
+            font-size: 0.9rem;
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 1.25rem;
+            margin-bottom: 1rem;
+        }
+
+        .card h2 {
+            font-size: 1.1rem;
+            margin-bottom: 0.75rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .finding {
+            border-left: 4px solid var(--danger);
+            padding-left: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .finding.medium { border-left-color: #f59e0b; }
+        .finding.low { border-left-color: var(--accent); }
+        .finding.info { border-left-color: var(--muted); }
+
+        .finding-title {
+            font-weight: 600;
+            margin-bottom: 0.25rem;
+        }
+
+        .finding-text {
+            color: var(--muted);
+            font-size: 0.9rem;
+            line-height: 1.5;
+            margin-bottom: 0.5rem;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            padding: 0.5rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--card);
+            color: var(--text);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .btn:hover { border-color: var(--accent); color: var(--accent); }
+        .btn:active { transform: scale(0.97); }
+
+        .btn.speaking {
+            border-color: var(--danger);
+            color: var(--danger);
+            animation: pulse 1s infinite;
+        }
+
+        .btn.listening {
+            border-color: var(--success);
+            color: var(--success);
+            animation: pulse 1s infinite;
+        }
+
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+
+        .btn-primary:hover { opacity: 0.9; color: white; }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .chat-area {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 0.6rem 1rem;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--text);
+            font-size: 0.95rem;
+        }
+
+        .chat-input:focus { outline: none; border-color: var(--accent); }
+
+        .response-area {
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: var(--bg);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            min-height: 2.5rem;
+        }
+
+        .interim {
+            color: var(--muted);
+            font-style: italic;
+        }
+
+        .support-info {
+            font-size: 0.8rem;
+            color: var(--muted);
+            margin-top: 0.5rem;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 0.15rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge.high { background: #fef2f2; color: #dc2626; }
+        .badge.medium { background: #fffbeb; color: #d97706; }
+        .badge.low { background: #eff6ff; color: #2563eb; }
+
+        @media (prefers-color-scheme: dark) {
+            :root:not([data-theme="light"]) .badge.high { background: #451a1a; }
+            :root:not([data-theme="light"]) .badge.medium { background: #452a1a; }
+            :root:not([data-theme="light"]) .badge.low { background: #1a2a45; }
+        }
+
+        .lang-toggle {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .lang-toggle .btn.active {
+            background: var(--accent);
+            color: white;
+            border-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Network Scanner - Voice Demo</h1>
+        <p class="subtitle">TTS (citeste raspunsuri) + STT (pune intrebari cu vocea)</p>
+
+        <div class="lang-toggle">
+            <button class="btn active" onclick="setLang('ro')" id="btn-ro">RO Romana</button>
+            <button class="btn" onclick="setLang('en')" id="btn-en">EN English</button>
+        </div>
+
+        <!-- Finding cu buton de citire -->
+        <div class="card">
+            <h2>Findings</h2>
+
+            <div class="finding" id="f1">
+                <div class="finding-title">
+                    <span class="badge high">HIGH</span>
+                    CAMERA_STREAM_EXPOSED
+                    <span style="color:var(--muted); font-weight:normal; font-size:0.85rem;">
+                        192.168.1.40:554
+                    </span>
+                </div>
+                <div class="finding-text" data-ro="Camera ta IP de la adresa 192.168.1.40 poate fi vazuta de oricine din reteaua ta, fara nicio parola. Un vecin sau un vizitator conectat la WiFi-ul tau ar putea vedea ce filmeaza camera ta." data-en="Your IP camera at 192.168.1.40 can be viewed by anyone on your network without a password. A neighbor or visitor connected to your WiFi could see what your camera is recording.">
+                    Camera ta IP de la adresa 192.168.1.40 poate fi vazuta de oricine din reteaua ta, fara nicio parola. Un vecin sau un vizitator conectat la WiFi-ul tau ar putea vedea ce filmeaza camera ta.
+                </div>
+                <button class="btn" onclick="speakFinding('f1')">
+                    <span class="icon">&#128264;</span>
+                    <span data-ro="Citeste-mi" data-en="Read to me">Citeste-mi</span>
+                </button>
+                <button class="btn" onclick="speakFix('f1')">
+                    <span class="icon">&#128295;</span>
+                    <span data-ro="Citeste pasii de fix" data-en="Read fix steps">Citeste pasii de fix</span>
+                </button>
+                <div class="fix-steps" data-ro="Pasul 1. Deschide setarile camerei in browser, scrie adresa 192.168.1.40 in bara de adrese. Pasul 2. Cauta sectiunea Network sau RTSP Settings. Pasul 3. Activeaza Authentication Required sau Require Password. Pasul 4. Seteaza o parola puternica. Pasul 5. Verifica ca streamul nu mai e vizibil fara parola." data-en="Step 1. Open the camera settings in your browser, type 192.168.1.40 in the address bar. Step 2. Look for Network or RTSP Settings. Step 3. Enable Authentication Required or Require Password. Step 4. Set a strong password. Step 5. Verify the stream is no longer visible without a password." style="display:none;"></div>
+            </div>
+
+            <div class="finding medium" id="f2">
+                <div class="finding-title">
+                    <span class="badge medium">MEDIUM</span>
+                    HTTP_ADMIN_CLEARTEXT
+                    <span style="color:var(--muted); font-weight:normal; font-size:0.85rem;">
+                        192.168.1.1:80
+                    </span>
+                </div>
+                <div class="finding-text" data-ro="Pagina de administrare a routerului tau de la 192.168.1.1 nu e protejata cu HTTPS. Oricine din retea ar putea vedea parola ta de admin cand te conectezi." data-en="Your router's admin page at 192.168.1.1 is not protected with HTTPS. Anyone on the network could see your admin password when you log in.">
+                    Pagina de administrare a routerului tau de la 192.168.1.1 nu e protejata cu HTTPS. Oricine din retea ar putea vedea parola ta de admin cand te conectezi.
+                </div>
+                <button class="btn" onclick="speakFinding('f2')">
+                    <span class="icon">&#128264;</span>
+                    <span data-ro="Citeste-mi" data-en="Read to me">Citeste-mi</span>
+                </button>
+                <button class="btn" onclick="speakFix('f2')">
+                    <span class="icon">&#128295;</span>
+                    <span data-ro="Citeste pasii de fix" data-en="Read fix steps">Citeste pasii de fix</span>
+                </button>
+                <div class="fix-steps" data-ro="Pasul 1. Deschide setarile routerului in browser la adresa 192.168.1.1. Pasul 2. Cauta optiunea de HTTPS sau SSL in setarile de administrare. Pasul 3. Activeaza HTTPS si dezactiveaza HTTP simplu. Pasul 4. Dupa activare, acceseaza pagina prin h t t p s in loc de h t t p." data-en="Step 1. Open the router settings in your browser at 192.168.1.1. Step 2. Look for HTTPS or SSL in the administration settings. Step 3. Enable HTTPS and disable plain HTTP. Step 4. After enabling, access the page using HTTPS instead of HTTP." style="display:none;"></div>
+            </div>
+        </div>
+
+        <!-- Chat cu voce -->
+        <div class="card">
+            <h2>Intreaba asistentul</h2>
+            <p class="finding-text" data-ro="Scrie sau spune intrebarea ta despre reteaua scanata." data-en="Type or speak your question about the scanned network.">
+                Scrie sau spune intrebarea ta despre reteaua scanata.
+            </p>
+            <div class="chat-area">
+                <input class="chat-input" id="chat-input"
+                    placeholder="Ce dispozitiv e cel mai periculos?"
+                    onkeydown="if(event.key==='Enter')sendQuestion()">
+                <button class="btn" id="btn-mic" onclick="listenQuestion()">
+                    <span class="icon">&#127908;</span>
+                    <span data-ro="Vorbeste" data-en="Speak">Vorbeste</span>
+                </button>
+                <button class="btn btn-primary" onclick="sendQuestion()">
+                    <span data-ro="Trimite" data-en="Send">Trimite</span>
+                </button>
+            </div>
+            <div id="interim" class="interim" style="margin-top:0.5rem; min-height:1.2rem;"></div>
+            <div class="response-area" id="response">
+                <span style="color:var(--muted)" data-ro="Raspunsul va aparea aici..." data-en="The answer will appear here...">Raspunsul va aparea aici...</span>
+            </div>
+            <div style="margin-top:0.5rem; display:flex; gap:0.5rem;">
+                <button class="btn" id="btn-read-response" onclick="speakResponse()" style="display:none;">
+                    <span class="icon">&#128264;</span>
+                    <span data-ro="Citeste raspunsul" data-en="Read answer">Citeste raspunsul</span>
+                </button>
+                <button class="btn" id="btn-stop" onclick="stopAll()" style="display:none;">
+                    <span class="icon">&#9209;</span>
+                    <span data-ro="Stop" data-en="Stop">Stop</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="support-info" id="support-info"></div>
+    </div>
+
+    <script type="module">
+        import { speak, stopSpeaking, isSpeaking, listen, isSupported, onVoicesReady } from './voice.js';
+
+        let currentLang = "ro";
+        let lastResponse = "";
+
+        // Expose to onclick handlers
+        window.setLang = function(lang) {
+            currentLang = lang;
+            document.getElementById("btn-ro").classList.toggle("active", lang === "ro");
+            document.getElementById("btn-en").classList.toggle("active", lang === "en");
+
+            // Update all text with data-ro/data-en
+            document.querySelectorAll("[data-ro]").forEach(el => {
+                el.textContent = el.getAttribute(`data-${lang}`);
+            });
+
+            document.getElementById("chat-input").placeholder =
+                lang === "ro" ? "Ce dispozitiv e cel mai periculos?" : "Which device is the most dangerous?";
+        };
+
+        window.speakFinding = async function(findingId) {
+            const el = document.querySelector(`#${findingId} .finding-text`);
+            const text = el.getAttribute(`data-${currentLang}`);
+            const btn = document.querySelector(`#${findingId} .btn`);
+            btn.classList.add("speaking");
+            document.getElementById("btn-stop").style.display = "inline-flex";
+            try {
+                await speak(text, currentLang === "ro" ? "ro-RO" : "en-US");
+            } finally {
+                btn.classList.remove("speaking");
+                if (!isSpeaking()) document.getElementById("btn-stop").style.display = "none";
+            }
+        };
+
+        window.speakFix = async function(findingId) {
+            const el = document.querySelector(`#${findingId} .fix-steps`);
+            const text = el.getAttribute(`data-${currentLang}`);
+            const btns = document.querySelectorAll(`#${findingId} .btn`);
+            btns[1].classList.add("speaking");
+            document.getElementById("btn-stop").style.display = "inline-flex";
+            try {
+                await speak(text, currentLang === "ro" ? "ro-RO" : "en-US");
+            } finally {
+                btns[1].classList.remove("speaking");
+                if (!isSpeaking()) document.getElementById("btn-stop").style.display = "none";
+            }
+        };
+
+        window.listenQuestion = async function() {
+            const btn = document.getElementById("btn-mic");
+            const input = document.getElementById("chat-input");
+            const interimEl = document.getElementById("interim");
+
+            btn.classList.add("listening");
+            interimEl.textContent = currentLang === "ro" ? "Ascult..." : "Listening...";
+
+            try {
+                const text = await listen(
+                    currentLang === "ro" ? "ro-RO" : "en-US",
+                    {
+                        timeout: 8000,
+                        onInterim: (partial) => {
+                            interimEl.textContent = partial;
+                        }
+                    }
+                );
+                if (text) {
+                    input.value = text;
+                    interimEl.textContent = "";
+                    // Auto-send
+                    sendQuestion();
+                } else {
+                    interimEl.textContent = currentLang === "ro"
+                        ? "Nu am auzit nimic. Incearca din nou."
+                        : "Didn't hear anything. Try again.";
+                }
+            } catch (e) {
+                interimEl.textContent = e.message;
+            } finally {
+                btn.classList.remove("listening");
+            }
+        };
+
+        window.sendQuestion = async function() {
+            const input = document.getElementById("chat-input");
+            const question = input.value.trim();
+            if (!question) return;
+
+            const responseEl = document.getElementById("response");
+            responseEl.innerHTML = `<span style="color:var(--muted)">${
+                currentLang === "ro" ? "Se gandeste..." : "Thinking..."
+            }</span>`;
+
+            // In demo, simulam un raspuns. In productie, asta merge la /api/ask
+            try {
+                const res = await fetch(`/api/ask`, {
+                    method: "POST",
+                    headers: {"Content-Type": "application/json"},
+                    body: JSON.stringify({ question, language: currentLang }),
+                });
+                const data = await res.json();
+                lastResponse = data.text;
+                responseEl.textContent = lastResponse;
+            } catch {
+                // Fallback demo response
+                lastResponse = currentLang === "ro"
+                    ? `Dispozitivul cel mai periculos din reteaua ta este camera IP de la 192.168.1.40. Are streamul video deschis fara parola (CAMERA_STREAM_EXPOSED). Oricine conectat la reteaua ta poate vedea ce filmeaza. Primul pas: deschide 192.168.1.40 in browser si seteaza o parola la sectiunea RTSP.`
+                    : `The most dangerous device on your network is the IP camera at 192.168.1.40. Its video stream is open without a password (CAMERA_STREAM_EXPOSED). Anyone connected to your network can see what it records. First step: open 192.168.1.40 in your browser and set a password in the RTSP section.`;
+                responseEl.textContent = lastResponse;
+            }
+
+            document.getElementById("btn-read-response").style.display = "inline-flex";
+            input.value = "";
+        };
+
+        window.speakResponse = async function() {
+            if (!lastResponse) return;
+            const btn = document.getElementById("btn-read-response");
+            btn.classList.add("speaking");
+            document.getElementById("btn-stop").style.display = "inline-flex";
+            try {
+                await speak(lastResponse, currentLang === "ro" ? "ro-RO" : "en-US");
+            } finally {
+                btn.classList.remove("speaking");
+                document.getElementById("btn-stop").style.display = "none";
+            }
+        };
+
+        window.stopAll = function() {
+            stopSpeaking();
+            document.querySelectorAll(".speaking").forEach(el => el.classList.remove("speaking"));
+            document.getElementById("btn-stop").style.display = "none";
+        };
+
+        // Check support
+        const support = isSupported();
+        const infoEl = document.getElementById("support-info");
+        const parts = [];
+        if (support.tts) parts.push("TTS OK");
+        else parts.push("TTS not supported");
+        if (support.stt) parts.push("STT OK");
+        else parts.push("STT not supported (use Chrome or Edge)");
+        infoEl.textContent = `Browser support: ${parts.join(" | ")}`;
+
+        // Load voices
+        onVoicesReady(() => {
+            const roVoices = window.speechSynthesis.getVoices().filter(v => v.lang.startsWith("ro"));
+            if (roVoices.length > 0) {
+                infoEl.textContent += ` | Romanian voice: ${roVoices[0].name}`;
+            } else {
+                infoEl.textContent += " | No Romanian voice found (will use default)";
+            }
+        });
+    </script>
+</body>
+</html>

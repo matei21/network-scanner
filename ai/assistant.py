@@ -24,7 +24,7 @@ from ai.search_service import search_device_guide, format_search_results
 class Assistant:
     """Q&A assistant care raspunde la intrebari despre un scan."""
 
-    def __init__(self, scan_data: dict, enable_cloud: bool = True, enable_local: bool = True):
+    def __init__(self, scan_data: dict, enable_cloud: bool = False, enable_local: bool = True):
         self.scan_data = scan_data
         self.ai = AIService(enable_cloud=enable_cloud, enable_local=enable_local)
         self.chatbot = Chatbot(self.ai, scan_data)
@@ -42,32 +42,84 @@ class Assistant:
         return self.ai.generate_fix_steps(finding_code, device_info, language)
 
     def get_detailed_fix(self, finding_code: str, device_info: dict, language: str = "ro") -> dict:
-        """Cauta pe internet instructiuni specifice si genereaza fix detaliat."""
+        """
+        Cauta pe internet instructiuni specifice si genereaza fix detaliat.
+        Structura prompt-ului:
+          1. Informatii despre dispozitiv (din scan)
+          2. Sfaturi generice (mereu prezente, nu depind de search)
+          3. Instructiuni gasite online (DuckDuckGo, daca gaseste)
+          4. Cerere catre model sa combine totul in pasi simpli
+        """
         vendor = device_info.get("vendor", "")
         product = device_info.get("product", "")
+        service = device_info.get("service", "")
+        port = device_info.get("port", "?")
+        ip = device_info.get("ip", "?")
         action = _code_to_action(finding_code)
 
+        # Sfaturi generice -- mereu prezente, indiferent de search
+        generic_advice = _get_generic_advice(finding_code, language)
+
+        # Template fix steps -- fallback solid
+        template = get_template(finding_code, language)
+        template_steps = template["fix_steps"] if template else []
+
+        # Cautare online -- poate esua, si e OK
         search_results = search_device_guide(vendor, product, action)
         search_text = format_search_results(search_results)
+        has_search = len(search_results) > 0
 
         lang_name = "romana" if language == "ro" else "engleza"
         system_prompt = (
-            f"Esti un asistent de securitate. "
-            f"Raspunde in {lang_name} cu pasi numerotati, simplu. "
-            f"Bazeaza-te pe instructiunile gasite online de mai jos. "
-            f"Daca nu sunt relevante, spune-i utilizatorului sa caute "
-            f"manualul dispozitivului."
+            f"Esti un asistent de securitate pentru retele de casa. "
+            f"Raspunde in {lang_name} cu pasi numerotati, simplu, "
+            f"ca pentru o persoana fara cunostinte tehnice.\n\n"
+            f"REGULI:\n"
+            f"- Foloseste informatiile din sectiunile de mai jos.\n"
+            f"- Incepe cu pasul cel mai important.\n"
+            f"- Include adresa IP ({ip}) cand utilizatorul trebuie sa o scrie undeva.\n"
+            f"- Daca instructiunile online nu par relevante, ignora-le si bazeaza-te "
+            f"pe sfaturile generice.\n"
+            f"- Mentioneaza producatorul ({vendor}) cand e util.\n"
+            f"- La final, adauga: 'Daca meniul arata diferit pe dispozitivul tau, "
+            f"cauta in setari cuvintele cheie: {action}.'\n"
+            f"- Maxim 5 pasi."
         )
 
         user_msg = (
-            f"Dispozitiv: {vendor} {product} ({device_info.get('ip', '?')})\n"
-            f"Problema: {finding_code} pe portul {device_info.get('port', '?')}\n\n"
-            f"Instructiuni gasite online:\n{search_text}\n\n"
-            f"Scrie pasii de rezolvare."
+            f"=== DISPOZITIV ===\n"
+            f"Producator: {vendor}\n"
+            f"Produs: {product}\n"
+            f"Adresa IP: {ip}\n"
+            f"Serviciu: {service} pe portul {port}\n"
+            f"Problema: {finding_code}\n\n"
+            f"=== SFATURI GENERICE (valabile pentru orice dispozitiv) ===\n"
+            f"{generic_advice}\n\n"
+        )
+
+        if has_search:
+            user_msg += (
+                f"=== INSTRUCTIUNI GASITE ONLINE (pot fi specifice modelului) ===\n"
+                f"{search_text}\n\n"
+            )
+        else:
+            user_msg += (
+                f"=== INSTRUCTIUNI ONLINE ===\n"
+                f"Nu am gasit instructiuni specifice pentru acest model.\n"
+                f"Bazeaza-te pe sfaturile generice de mai sus.\n\n"
+            )
+
+        user_msg += (
+            f"=== PASI TEMPLATE (de baza) ===\n"
+            + "\n".join(f"- {s}" for s in template_steps)
+            + "\n\n"
+            f"Combina informatiile de mai sus si scrie pasii de rezolvare."
         )
 
         result = self.ai.chat(system_prompt, user_msg, finding_code, language)
         result["search_results"] = search_results
+        result["generic_advice"] = generic_advice
+        result["template_steps"] = template_steps
         return result
 
     def reset(self):
@@ -121,6 +173,7 @@ def enrich_scan_data(scan_result_dict: dict) -> dict:
                     finding[f"fix_steps_{lang}"] = template["fix_steps"]
                     finding[f"cis_control"] = template["cis_control"]
                     finding[f"owasp_iot"] = template["owasp_iot"]
+                finding[f"risk_scenario_{lang}"] = get_risk_scenario(code, lang)
 
     return scan_result_dict
 
@@ -165,3 +218,524 @@ def _code_to_action(finding_code: str) -> str:
         "SSH_OPEN": "secure SSH disable password authentication",
     }
     return actions.get(finding_code, "fix security issue")
+
+
+# Sfaturi generice per finding -- fallback cand DuckDuckGo nu gaseste nimic relevant.
+# Structura: ce sa caute utilizatorul in meniul dispozitivului, indiferent de marca.
+_GENERIC_ADVICE = {
+    "ro": {
+        "TELNET_OPEN": (
+            "Cauta in setarile dispozitivului meniul 'Administrare' sau 'Management'. "
+            "Cauta optiunea 'Telnet' si dezactiveaz-o. "
+            "Daca nu gasesti Telnet explicit, cauta 'Remote Access' sau 'Acces la distanta' "
+            "si dezactiveaza tot ce nu folosesti. "
+            "Dupa dezactivare, verifica ca poti accesa dispozitivul prin interfata web (browser)."
+        ),
+        "RDP_EXPOSED": (
+            "Pe calculator, deschide 'Setari' > 'Sistem' > 'Desktop la distanta' si dezactiveaza-l. "
+            "Daca ai nevoie de acces de la distanta, activeaza un VPN in loc. "
+            "Pe Windows, cauta 'Remote Desktop Settings' in bara de cautare."
+        ),
+        "VNC_EXPOSED": (
+            "Cauta programul VNC Server (ex: RealVNC, TightVNC) in bara de aplicatii (system tray). "
+            "Click dreapta pe iconita si opreste serviciul sau seteaza o parola puternica. "
+            "Daca nu ai nevoie de control la distanta, dezinstaleaza programul VNC complet."
+        ),
+        "DB_EXPOSED": (
+            "Baza de date nu ar trebui sa fie accesibila din retea. "
+            "In fisierul de configurare al bazei de date, seteaza 'bind-address' la '127.0.0.1' "
+            "ca sa asculte doar local. "
+            "Daca nu stii unde e configurarea, cauta 'my.cnf' (MySQL) sau 'postgresql.conf' (PostgreSQL)."
+        ),
+        "CAMERA_STREAM_EXPOSED": (
+            "Deschide aplicatia camerei sau acceseaz-o prin browser la adresa IP afisata. "
+            "Cauta 'Settings' > 'Network' > 'RTSP' sau 'Stream'. "
+            "Activeaza 'Authentication' / 'Autentificare' pentru stream. "
+            "Seteaza un username si parola puternica. "
+            "Daca nu gasesti optiunea, cauta butonul de 'Security' sau 'Securitate'."
+        ),
+        "OUTDATED_SERVICE": (
+            "Verifica versiunea curenta a software-ului sau firmware-ului. "
+            "Cauta pe site-ul producatorului sectiunea 'Support' sau 'Downloads'. "
+            "Descarca ultima versiune si urmeaza instructiunile de actualizare. "
+            "La routere si camere, cauta 'Firmware Update' in setari. "
+            "IMPORTANT: Nu intrerupe alimentarea in timpul actualizarii!"
+        ),
+        "FTP_CLEARTEXT": (
+            "Cauta in setarile dispozitivului optiunea 'FTP' si dezactiveaz-o. "
+            "Daca ai nevoie de transfer de fisiere, foloseste 'SFTP' sau 'SCP' in loc. "
+            "Pe routere, meniul e de obicei la 'USB' > 'FTP Server' sau 'Storage Sharing'."
+        ),
+        "HTTP_ADMIN_CLEARTEXT": (
+            "Deschide setarile dispozitivului in browser. "
+            "Cauta 'Administration' > 'Management' sau 'System'. "
+            "Activeaza 'HTTPS' / 'SSL' si dezactiveaza 'HTTP' simplu. "
+            "Daca nu exista optiunea de HTTPS, schimba cel putin parola de admin cu una puternica. "
+            "Cauta si optiunea de a schimba portul de administrare."
+        ),
+        "SMB_EXPOSED": (
+            "Pe router, cauta 'USB' > 'File Sharing' sau 'Samba/SMB' si dezactiveaza-l. "
+            "Pe Windows, deschide 'Panou de Control' > 'Programe' > 'Activeaza/Dezactiveaza caracteristici Windows' "
+            "si debifati 'SMB 1.0'. "
+            "Daca ai nevoie de partajare fisiere, pune o parola pe fiecare folder partajat."
+        ),
+        "MQTT_EXPOSED": (
+            "MQTT e un protocol folosit de dispozitivele smart home. "
+            "Deschide configurarea broker-ului MQTT (ex: Mosquitto). "
+            "Adauga autentificare cu username si parola. "
+            "In fisierul de configurare, adauga 'allow_anonymous false' si creaza un fisier de parole."
+        ),
+        "UPNP_EXPOSED": (
+            "Deschide setarile routerului in browser (de obicei 192.168.1.1 sau 192.168.0.1). "
+            "Cauta meniul 'NAT' / 'Forwarding' / 'Advanced'. "
+            "Gaseste optiunea 'UPnP' si dezactiveaz-o. "
+            "Dispozitivele care aveau nevoie de UPnP pot necesita port forwarding manual."
+        ),
+        "SNMP_EXPOSED": (
+            "SNMP e un protocol de monitorizare a retelei, rar necesar acasa. "
+            "In setarile dispozitivului, cauta 'SNMP' si dezactiveaz-o. "
+            "La imprimante, cautati in 'Network Settings' > 'SNMP'. "
+            "Daca nu gasesti, cauta 'Management' sau 'Monitoring'."
+        ),
+        "PRINTER_RAW_EXPOSED": (
+            "Portul 9100 al imprimantei e deschis fara protectie. "
+            "Deschide pagina web a imprimantei (IP-ul afisat, in browser). "
+            "Cauta 'Networking' > 'Raw Port' sau 'Port 9100' sau 'JetDirect'. "
+            "Daca nu ai nevoie de printare din retea, dezactiveaza portul. "
+            "Altfel, adauga o parola de admin pe imprimanta."
+        ),
+        "UNKNOWN_DEVICE": (
+            "Un dispozitiv necunoscut e conectat la reteaua ta. "
+            "Verifica adresa MAC pe site-ul producatorului pentru a identifica ce e. "
+            "Daca nu il recunosti, schimba parola WiFi pentru a-l deconecta. "
+            "In setarile routerului, cauta 'Connected Devices' / 'Client List' si blocheaza MAC-ul."
+        ),
+        "SSH_OPEN": (
+            "Deschide configurarea SSH (de obicei fisierul /etc/ssh/sshd_config). "
+            "Seteaza 'PasswordAuthentication no' si foloseste chei SSH in loc. "
+            "Schimba portul din 22 in alt numar (ex: 2222). "
+            "Daca nu ai nevoie de SSH, dezactiveaz-a complet din setarile dispozitivului."
+        ),
+    },
+    "en": {
+        "TELNET_OPEN": (
+            "Look in the device settings for 'Administration' or 'Management'. "
+            "Find the 'Telnet' option and disable it. "
+            "If Telnet isn't listed explicitly, look for 'Remote Access' and disable everything you don't use. "
+            "After disabling, verify you can still access the device via its web interface (browser)."
+        ),
+        "RDP_EXPOSED": (
+            "On your computer, open Settings > System > Remote Desktop and turn it off. "
+            "If you need remote access, use a VPN instead. "
+            "On Windows, search for 'Remote Desktop Settings' in the search bar."
+        ),
+        "VNC_EXPOSED": (
+            "Look for the VNC Server program (e.g., RealVNC, TightVNC) in the system tray. "
+            "Right-click its icon and stop the service, or set a strong password. "
+            "If you don't need remote control, uninstall the VNC program entirely."
+        ),
+        "DB_EXPOSED": (
+            "The database should not be accessible from the network. "
+            "In the database configuration file, set 'bind-address' to '127.0.0.1' to listen locally only. "
+            "If unsure where the config is, look for 'my.cnf' (MySQL) or 'postgresql.conf' (PostgreSQL)."
+        ),
+        "CAMERA_STREAM_EXPOSED": (
+            "Open the camera app or access it via browser at the displayed IP address. "
+            "Look for Settings > Network > RTSP or Stream. "
+            "Enable 'Authentication' for the stream and set a strong username and password. "
+            "If you can't find the option, look for a 'Security' button."
+        ),
+        "OUTDATED_SERVICE": (
+            "Check the current software or firmware version. "
+            "Visit the manufacturer's website, Support or Downloads section. "
+            "Download the latest version and follow the update instructions. "
+            "For routers and cameras, look for 'Firmware Update' in settings. "
+            "IMPORTANT: Do not interrupt power during the update!"
+        ),
+        "FTP_CLEARTEXT": (
+            "Look in the device settings for 'FTP' and disable it. "
+            "If you need file transfers, use 'SFTP' or 'SCP' instead. "
+            "On routers, the menu is usually under USB > FTP Server or Storage Sharing."
+        ),
+        "HTTP_ADMIN_CLEARTEXT": (
+            "Open the device settings in your browser. "
+            "Look for Administration > Management or System. "
+            "Enable 'HTTPS' / 'SSL' and disable plain 'HTTP'. "
+            "If HTTPS isn't available, at least change the admin password to a strong one. "
+            "Also look for an option to change the admin port."
+        ),
+        "SMB_EXPOSED": (
+            "On the router, look for USB > File Sharing or Samba/SMB and disable it. "
+            "On Windows, open Control Panel > Programs > Turn Windows features on or off "
+            "and uncheck 'SMB 1.0'. "
+            "If you need file sharing, put a password on every shared folder."
+        ),
+        "MQTT_EXPOSED": (
+            "MQTT is a protocol used by smart home devices. "
+            "Open the MQTT broker configuration (e.g., Mosquitto). "
+            "Add username and password authentication. "
+            "In the config file, add 'allow_anonymous false' and create a password file."
+        ),
+        "UPNP_EXPOSED": (
+            "Open the router settings in your browser (usually 192.168.1.1 or 192.168.0.1). "
+            "Look for NAT / Forwarding / Advanced menu. "
+            "Find the 'UPnP' option and disable it. "
+            "Devices that relied on UPnP may need manual port forwarding."
+        ),
+        "SNMP_EXPOSED": (
+            "SNMP is a network monitoring protocol, rarely needed at home. "
+            "In the device settings, look for 'SNMP' and disable it. "
+            "For printers, check Network Settings > SNMP. "
+            "If you can't find it, look under 'Management' or 'Monitoring'."
+        ),
+        "PRINTER_RAW_EXPOSED": (
+            "The printer's port 9100 is open without protection. "
+            "Open the printer's web page (the displayed IP, in your browser). "
+            "Look for Networking > Raw Port or Port 9100 or JetDirect. "
+            "If you don't need network printing, disable the port. "
+            "Otherwise, add an admin password to the printer."
+        ),
+        "UNKNOWN_DEVICE": (
+            "An unknown device is connected to your network. "
+            "Check the MAC address on the manufacturer's website to identify it. "
+            "If you don't recognize it, change your WiFi password to disconnect it. "
+            "In the router settings, look for Connected Devices / Client List and block the MAC."
+        ),
+        "SSH_OPEN": (
+            "Open the SSH configuration (usually /etc/ssh/sshd_config). "
+            "Set 'PasswordAuthentication no' and use SSH keys instead. "
+            "Change the port from 22 to another number (e.g., 2222). "
+            "If you don't need SSH, disable it completely in the device settings."
+        ),
+    },
+}
+
+
+def _get_generic_advice(finding_code: str, language: str = "ro") -> str:
+    """Returneaza sfaturi generice pentru un finding, indiferent de dispozitiv."""
+    lang = language if language in _GENERIC_ADVICE else "ro"
+    return _GENERIC_ADVICE[lang].get(
+        finding_code,
+        "Cauta in setarile dispozitivului optiunea legata de acest serviciu si dezactiveaz-o."
+        if lang == "ro"
+        else "Look in the device settings for the option related to this service and disable it.",
+    )
+
+
+# ── Risk Scenarios (FR-12 enhancement) ──────────────────────────────
+# Concrete attack stories per finding -- makes the demo impactful.
+
+_RISK_SCENARIOS = {
+    "ro": {
+        "TELNET_OPEN": "Un atacator conectat la reteaua ta WiFi poate intercepta parola de admin a routerului in cateva secunde, deoarece Telnet o trimite necriptat. Odata ce are acces, poate redirectiona tot traficul tau prin serverul lui.",
+        "RDP_EXPOSED": "Un atacator poate incerca mii de parole pe minut pentru a ghici accesul la desktopul tau. Odata intrat, vede tot ce ai pe ecran, poate copia fisiere si instala programe.",
+        "VNC_EXPOSED": "Un atacator poate vedea in timp real tot ce faci pe ecran -- inclusiv cand tastezi parole sau citesti emailuri. Practic, se uita peste umarul tau digital.",
+        "DB_EXPOSED": "Un atacator poate accesa direct baza de date si citi, modifica sau sterge toate informatiile stocate -- conturi de utilizatori, date personale, tot.",
+        "CAMERA_STREAM_EXPOSED": "Oricine conectat la reteaua ta WiFi poate vedea live ce filmeaza camera ta de supraveghere. Un vecin sau un vizitator cu parola WiFi poate urmari totul.",
+        "OUTDATED_SERVICE": "Versiunea veche a acestui software are vulnerabilitati publice. Un atacator poate gasi exploit-ul pe internet si poate prelua controlul dispozitivului in cateva minute.",
+        "FTP_CLEARTEXT": "Cand transferi fisiere prin FTP, un atacator din retea poate vedea continutul fisierelor si parola ta. E ca si cum ai trimite corespondenta fara plic.",
+        "HTTP_ADMIN_CLEARTEXT": "Cand te autentifici in panoul de administrare, parola ta circula necriptata prin retea. Un atacator o poate captura si preia controlul dispozitivului.",
+        "SMB_EXPOSED": "Un atacator din retea poate naviga prin fisierele partajate de pe acest dispozitiv. Daca nu sunt protejate cu parola, poate copia sau sterge orice.",
+        "MQTT_EXPOSED": "Un atacator poate trimite comenzi dispozitivelor tale smart home -- poate aprinde/stinge lumini, deschide incuietori inteligente sau opri alarma.",
+        "UPNP_EXPOSED": "Un program malitios de pe orice dispozitiv din retea poate deschide automat porturi pe router, expunand servicii interne catre internet fara sa stii.",
+        "SNMP_EXPOSED": "Un atacator poate citi configurarea completa a dispozitivului si, cu acces de scriere, poate schimba setarile routerului -- inclusiv serverele DNS.",
+        "PRINTER_RAW_EXPOSED": "Un atacator poate trimite documente la imprimanta ta, poate citi ce printezi sau chiar poate schimba firmware-ul imprimantei.",
+        "UNKNOWN_DEVICE": "Un dispozitiv necunoscut pe reteaua ta poate fi al unui vecin care ti-a ghicit parola WiFi sau un dispozitiv compromis care colecteaza date.",
+        "SSH_OPEN": "SSH e criptat, dar daca parola e slaba, un atacator poate incerca automat mii de combinatii. Recomandam chei SSH in loc de parola.",
+    },
+    "en": {
+        "TELNET_OPEN": "An attacker on your WiFi can intercept your router's admin password in seconds because Telnet sends it unencrypted. Once they have access, they can redirect all your traffic through their server.",
+        "RDP_EXPOSED": "An attacker can try thousands of passwords per minute to guess access to your desktop. Once in, they can see everything on your screen, copy files, and install software.",
+        "VNC_EXPOSED": "An attacker can watch in real-time everything you do on screen -- including when you type passwords or read emails. They're essentially looking over your digital shoulder.",
+        "DB_EXPOSED": "An attacker can directly access the database and read, modify, or delete all stored information -- user accounts, personal data, everything.",
+        "CAMERA_STREAM_EXPOSED": "Anyone connected to your WiFi can watch the live feed from your security camera. A neighbor or guest with the WiFi password can watch everything.",
+        "OUTDATED_SERVICE": "This old software version has publicly known vulnerabilities. An attacker can find the exploit online and take control of the device in minutes.",
+        "FTP_CLEARTEXT": "When you transfer files via FTP, an attacker on the network can see file contents and your password. It's like sending mail without an envelope.",
+        "HTTP_ADMIN_CLEARTEXT": "When you log into the admin panel, your password travels unencrypted across the network. An attacker can capture it and take control of the device.",
+        "SMB_EXPOSED": "An attacker on the network can browse files shared from this device. If they're not password-protected, anyone can copy or delete anything.",
+        "MQTT_EXPOSED": "An attacker can send commands to your smart home devices -- turning lights on/off, unlocking smart locks, or disabling your alarm.",
+        "UPNP_EXPOSED": "Malicious software on any device in your network can automatically open ports on your router, exposing internal services to the internet without you knowing.",
+        "SNMP_EXPOSED": "An attacker can read the complete device configuration and, with write access, change router settings -- including DNS servers.",
+        "PRINTER_RAW_EXPOSED": "An attacker can send documents to your printer, read what you're printing, or even change the printer's firmware.",
+        "UNKNOWN_DEVICE": "An unknown device on your network could be a neighbor who guessed your WiFi password or a compromised device collecting data.",
+        "SSH_OPEN": "SSH is encrypted, but if the password is weak, an attacker can automatically try thousands of combinations. We recommend SSH keys instead of passwords.",
+    },
+}
+
+
+def get_risk_scenario(finding_code: str, language: str = "ro") -> str:
+    lang = language if language in _RISK_SCENARIOS else "ro"
+    return _RISK_SCENARIOS[lang].get(finding_code, "")
+
+
+# ── Scan Narrator (FR-12 enhancement) ───────────────────────────────
+
+_SEVERITY_ORDER = {"high": 0, "medium": 1, "low": 2, "info": 3}
+_SEVERITY_LABEL = {
+    "ro": {"high": "critica", "medium": "medie", "low": "mica", "info": "informativa"},
+    "en": {"high": "critical", "medium": "medium", "low": "low", "info": "informational"},
+}
+_DEVICE_LABEL = {
+    "ro": {"router": "router", "camera": "camera de supraveghere", "printer": "imprimanta",
+           "smart_home": "dispozitiv smart home", "server": "server", "nas": "NAS",
+           "phone": "telefon", "computer": "calculator", "unknown": "dispozitiv necunoscut"},
+    "en": {"router": "router", "camera": "security camera", "printer": "printer",
+           "smart_home": "smart home device", "server": "server", "nas": "NAS",
+           "phone": "phone", "computer": "computer", "unknown": "unknown device"},
+}
+
+
+def narrate_scan(scan_data: dict, language: str = "ro") -> dict:
+    """Generate a narrative summary of the scan in plain language."""
+    devices = scan_data.get("devices", [])
+    score = scan_data.get("score", "?")
+    n_devices = len(devices)
+
+    all_findings = []
+    for d in devices:
+        for f in d.get("findings", []):
+            f_copy = dict(f)
+            f_copy["device_ip"] = d.get("ip", "?")
+            f_copy["device_type"] = d.get("type", "unknown")
+            f_copy["device_vendor"] = d.get("vendor", "")
+            all_findings.append(f_copy)
+
+    all_findings.sort(key=lambda f: _SEVERITY_ORDER.get(f.get("severity", "info"), 9))
+    n_findings = len(all_findings)
+    high_count = sum(1 for f in all_findings if f.get("severity") == "high")
+    medium_count = sum(1 for f in all_findings if f.get("severity") == "medium")
+
+    dev_labels = _DEVICE_LABEL.get(language, _DEVICE_LABEL["ro"])
+    sev_labels = _SEVERITY_LABEL.get(language, _SEVERITY_LABEL["ro"])
+
+    if language == "ro":
+        parts = []
+        parts.append(f"Reteaua ta are {n_devices} dispozitiv{'e' if n_devices != 1 else ''} si un scor de securitate de {score}/100.")
+
+        if n_findings == 0:
+            parts.append("Felicitari! Nu am gasit nicio problema de securitate. Reteaua ta este curata.")
+        else:
+            parts.append(f"Am gasit {n_findings} problem{'e' if n_findings != 1 else 'a'} de securitate"
+                         f"{f' ({high_count} critic{"e" if high_count != 1 else "a"})' if high_count else ''}.")
+
+            if high_count > 0:
+                parts.append("\nCele mai grave probleme:")
+                for f in all_findings:
+                    if f.get("severity") != "high":
+                        break
+                    dev_type = dev_labels.get(f["device_type"], f["device_type"])
+                    tmpl = get_template(f.get("code", ""), language)
+                    expl = tmpl["explanation"] if tmpl else f.get("code", "")
+                    parts.append(f"  - {dev_type} ({f['device_ip']}): {expl}")
+
+            if medium_count > 0:
+                parts.append(f"\nSi {medium_count} problem{'e' if medium_count != 1 else 'a'} de severitate medie.")
+
+            top = all_findings[0]
+            parts.append(f"\nRecomandare: incepe cu {top.get('code', '?')} pe {top['device_ip']} -- aceasta e cea mai urgenta.")
+    else:
+        parts = []
+        parts.append(f"Your network has {n_devices} device{'s' if n_devices != 1 else ''} and a security score of {score}/100.")
+
+        if n_findings == 0:
+            parts.append("Congratulations! No security issues found. Your network is clean.")
+        else:
+            parts.append(f"We found {n_findings} security issue{'s' if n_findings != 1 else ''}"
+                         f"{f' ({high_count} critical)' if high_count else ''}.")
+
+            if high_count > 0:
+                parts.append("\nMost serious issues:")
+                for f in all_findings:
+                    if f.get("severity") != "high":
+                        break
+                    dev_type = dev_labels.get(f["device_type"], f["device_type"])
+                    tmpl = get_template(f.get("code", ""), language)
+                    expl = tmpl["explanation"] if tmpl else f.get("code", "")
+                    parts.append(f"  - {dev_type} ({f['device_ip']}): {expl}")
+
+            if medium_count > 0:
+                parts.append(f"\nPlus {medium_count} medium-severity issue{'s' if medium_count != 1 else ''}.")
+
+            top = all_findings[0]
+            parts.append(f"\nRecommendation: start with {top.get('code', '?')} on {top['device_ip']} -- this is the most urgent.")
+
+    return {
+        "narrative": "\n".join(parts),
+        "total_devices": n_devices,
+        "total_findings": n_findings,
+        "high_count": high_count,
+        "medium_count": medium_count,
+        "score": score,
+    }
+
+
+# ── Smart Follow-ups (FR-12 enhancement) ────────────────────────────
+
+_FOLLOWUP_TEMPLATES = {
+    "ro": {
+        "TELNET_OPEN": [
+            "Cum dezactivez Telnet pe {vendor}?",
+            "Ce alternativa sigura am in loc de Telnet?",
+        ],
+        "RDP_EXPOSED": [
+            "Cum dezactivez Remote Desktop pe {ip}?",
+            "Ce e un VPN si cum ma ajuta?",
+        ],
+        "VNC_EXPOSED": [
+            "Cum opresc VNC pe {ip}?",
+            "Cum setez o parola puternica pe VNC?",
+        ],
+        "DB_EXPOSED": [
+            "Cum restricionez accesul la baza de date doar local?",
+            "Ce date sunt stocate in aceasta baza de date?",
+        ],
+        "CAMERA_STREAM_EXPOSED": [
+            "Cum pun parola pe camera {vendor}?",
+            "Poate cineva vedea camera mea de pe internet?",
+        ],
+        "OUTDATED_SERVICE": [
+            "Cum actualizez firmware-ul pe {vendor}?",
+            "Ce riscuri am daca nu actualizez?",
+        ],
+        "FTP_CLEARTEXT": [
+            "Cum inlocuiesc FTP cu SFTP?",
+            "Cum dezactivez FTP pe {vendor}?",
+        ],
+        "HTTP_ADMIN_CLEARTEXT": [
+            "Cum activez HTTPS pe {vendor}?",
+            "Ce parola ar trebui sa pun pe router?",
+        ],
+        "SMB_EXPOSED": [
+            "Cum dezactivez partajarea de fisiere pe {ip}?",
+            "Cum verific ce foldere sunt partajate?",
+        ],
+        "MQTT_EXPOSED": [
+            "Cum pun parola pe MQTT?",
+            "Ce dispozitive smart home folosesc MQTT?",
+        ],
+        "UPNP_EXPOSED": [
+            "Cum dezactivez UPnP pe router?",
+            "Ce se strica daca opresc UPnP?",
+        ],
+        "SNMP_EXPOSED": [
+            "Cum dezactivez SNMP pe {vendor}?",
+            "Ce informatii expune SNMP?",
+        ],
+        "PRINTER_RAW_EXPOSED": [
+            "Cum securizez imprimanta {vendor}?",
+            "Poate cineva printa pe imprimanta mea fara permisiune?",
+        ],
+        "UNKNOWN_DEVICE": [
+            "Cum aflu ce este acest dispozitiv necunoscut?",
+            "Cum schimb parola WiFi ca sa il deconectez?",
+        ],
+        "SSH_OPEN": [
+            "Cum trec de la parola la chei SSH?",
+            "Trebuie sa am SSH activ pe {ip}?",
+        ],
+    },
+    "en": {
+        "TELNET_OPEN": [
+            "How do I disable Telnet on {vendor}?",
+            "What secure alternative can I use instead of Telnet?",
+        ],
+        "RDP_EXPOSED": [
+            "How do I disable Remote Desktop on {ip}?",
+            "What is a VPN and how does it help?",
+        ],
+        "VNC_EXPOSED": [
+            "How do I stop VNC on {ip}?",
+            "How do I set a strong VNC password?",
+        ],
+        "DB_EXPOSED": [
+            "How do I restrict database access to localhost only?",
+            "What data is stored in this database?",
+        ],
+        "CAMERA_STREAM_EXPOSED": [
+            "How do I set a password on my {vendor} camera?",
+            "Can someone see my camera from the internet?",
+        ],
+        "OUTDATED_SERVICE": [
+            "How do I update the firmware on {vendor}?",
+            "What are the risks if I don't update?",
+        ],
+        "FTP_CLEARTEXT": [
+            "How do I replace FTP with SFTP?",
+            "How do I disable FTP on {vendor}?",
+        ],
+        "HTTP_ADMIN_CLEARTEXT": [
+            "How do I enable HTTPS on {vendor}?",
+            "What password should I use for my router?",
+        ],
+        "SMB_EXPOSED": [
+            "How do I disable file sharing on {ip}?",
+            "How do I check which folders are shared?",
+        ],
+        "MQTT_EXPOSED": [
+            "How do I add a password to MQTT?",
+            "Which smart home devices use MQTT?",
+        ],
+        "UPNP_EXPOSED": [
+            "How do I disable UPnP on my router?",
+            "What breaks if I turn off UPnP?",
+        ],
+        "SNMP_EXPOSED": [
+            "How do I disable SNMP on {vendor}?",
+            "What information does SNMP expose?",
+        ],
+        "PRINTER_RAW_EXPOSED": [
+            "How do I secure my {vendor} printer?",
+            "Can someone print on my printer without permission?",
+        ],
+        "UNKNOWN_DEVICE": [
+            "How do I find out what this unknown device is?",
+            "How do I change my WiFi password to disconnect it?",
+        ],
+        "SSH_OPEN": [
+            "How do I switch from password to SSH keys?",
+            "Do I need SSH active on {ip}?",
+        ],
+    },
+}
+
+
+def suggest_followups(scan_data: dict, answer_text: str, language: str = "ro") -> list[str]:
+    """Suggest 2-3 follow-up questions based on findings mentioned in the answer."""
+    lang = language if language in _FOLLOWUP_TEMPLATES else "ro"
+    templates = _FOLLOWUP_TEMPLATES[lang]
+    suggestions = []
+
+    mentioned = []
+    for device in scan_data.get("devices", []):
+        for finding in device.get("findings", []):
+            code = finding.get("code", "")
+            if code and code.lower() in answer_text.lower():
+                mentioned.append((code, device.get("ip", "?"), device.get("vendor", "")))
+
+    if not mentioned:
+        for device in scan_data.get("devices", []):
+            for finding in device.get("findings", []):
+                code = finding.get("code", "")
+                if code:
+                    mentioned.append((code, device.get("ip", "?"), device.get("vendor", "")))
+
+    seen_codes = set()
+    for code, ip, vendor in mentioned:
+        if code in seen_codes:
+            continue
+        seen_codes.add(code)
+        if code in templates:
+            for tmpl in templates[code]:
+                q = tmpl.format(ip=ip, vendor=vendor or "dispozitiv" if lang == "ro" else vendor or "device")
+                suggestions.append(q)
+        if len(suggestions) >= 3:
+            break
+
+    general = {
+        "ro": "Care e cea mai urgenta problema de rezolvat?",
+        "en": "What is the most urgent issue to fix?",
+    }
+    if len(suggestions) < 2:
+        suggestions.append(general[lang])
+
+    return suggestions[:3]
