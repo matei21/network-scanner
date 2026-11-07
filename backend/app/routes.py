@@ -11,7 +11,7 @@ from analyzer.parser import MAX_FILE_BYTES
 from analyzer.service import analyze_file, analyze_folder, to_dict
 
 from . import database as db
-from .guardrails import detect_network, validate_scan_target
+from .guardrails import build_allowlist, detect_network, validate_scan_target
 from .models import (
     DeleteResponse,
     DiffResult,
@@ -118,7 +118,8 @@ def get_diff(old_scan_id: int, new_scan_id: int):
 @router.post("/scan")
 def live_scan(req: ScanRequest):
     net = detect_network()
-    allowlist = [net["subnet"]] if net.get("subnet") else None
+    # Empty allowlist (network not detected) -> validate_scan_target refuses (fail closed).
+    allowlist = build_allowlist(net.get("subnet"))
     check = validate_scan_target(req.target, allowlist=allowlist, confirmed=req.confirm)
     if not check["allowed"]:
         raise HTTPException(403, check["reason"])
