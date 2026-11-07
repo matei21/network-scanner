@@ -81,19 +81,21 @@ export async function deleteHistory() {
   return r.json();
 }
 
-export async function askAssistant(question, scanId) {
+export async function askAssistant(question, scanId, language) {
   if (USE_MOCK) {
     await sleep(400);
     return {
       answer:
-        "Cea mai periculoasa problema este CAMERA_STREAM_EXPOSED pe 192.168.1.40 (camera Hikvision). Incepe cu aceasta: dezactiveaza RTSP din aplicatia camerei.",
+        language === "en"
+          ? "The most dangerous issue is CAMERA_STREAM_EXPOSED on 192.168.1.40 (Hikvision camera). Start here: disable RTSP from the camera app."
+          : "Cea mai periculoasa problema este CAMERA_STREAM_EXPOSED pe 192.168.1.40 (camera Hikvision). Incepe cu aceasta: dezactiveaza RTSP din aplicatia camerei.",
       cites: [{ ip: "192.168.1.40", port: 554, code: "CAMERA_STREAM_EXPOSED" }],
     };
   }
   const r = await fetch("/api/assistant/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, scan_id: scanId }),
+    body: JSON.stringify({ question, scan_id: scanId, language }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();

@@ -7,7 +7,7 @@ import { Sparkles, Send } from "lucide-react";
 // Renders the answer text + cited evidence (ip:port:code) so a juror can
 // verify the AI isn't inventing findings (NFR-06: grounded).
 export default function AssistantPanel({ scanId }) {
-  const { t } = useLanguage();
+  const { lang, t } = useLanguage();
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [msgs, setMsgs] = useState([]);
@@ -20,7 +20,7 @@ export default function AssistantPanel({ scanId }) {
     setQ("");
     setBusy(true);
     try {
-      const res = await askAssistant(text, scanId);
+      const res = await askAssistant(text, scanId, lang);
       setMsgs((m) => [
         ...m,
         { role: "assistant", text: res.answer, cites: res.cites || [] },

@@ -317,8 +317,10 @@ class AgentOrchestrator:
         self.history: list[dict] = []
 
     def ask(self, question: str, language: str | None = None) -> dict:
-        """Route question to the right agent. Always auto-detects language from user text."""
-        lang = detect_language(question)
+        """Route question to the right agent.
+        Uses explicit language from frontend toggle when provided, auto-detects otherwise.
+        """
+        lang = language if language else detect_language(question)
         agent = route_question(question)
         logger.info("Agent routing: %s (lang=%s) for: %s", agent, lang, question[:60])
 
