@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
-import { flattenFindings, sortedBySeverity, severityColorClasses, deviceIcon } from "../lib/findings";
+import { flattenFindings, sortedBySeverity, severityColorClasses } from "../lib/findings";
+import DeviceIcon from "./DeviceIcon";
 import { ChevronDown, ChevronUp, Flame } from "lucide-react";
 
 function SeverityBadge({ severity }) {
@@ -39,8 +40,8 @@ function FindingItem({ finding, lang, expert, isTop }) {
         >
           {finding.code}
         </code>
-        <span className="text-sm text-gray-700">
-          <span aria-hidden>{deviceIcon(device?.icon || device?.type)}</span>{" "}
+        <span className="text-sm text-gray-700 inline-flex items-center gap-1.5">
+          <DeviceIcon type={device?.type} size={20} />
           {device?.hostname || device?.ip} · {t("finding_port")} {finding.port}
         </span>
         {isTop && (

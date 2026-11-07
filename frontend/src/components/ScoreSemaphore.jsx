@@ -1,12 +1,12 @@
 import { useLanguage } from "../i18n/LanguageContext";
-import { verdictFromScore } from "../lib/findings";
+import { heroVerdict } from "../lib/findings";
 import { CheckCircle2, AlertTriangle, ShieldAlert, Loader2 } from "lucide-react";
 
 // Big traffic-light score. Color + icon + word label — color is never the
 // only signal (NFR-08).
-export default function ScoreSemaphore({ score, loading }) {
+export default function ScoreSemaphore({ score, scan, loading }) {
   const { t } = useLanguage();
-  const verdict = verdictFromScore(score);
+  const verdict = heroVerdict(scan);
 
   if (loading) {
     return (
@@ -56,13 +56,14 @@ export default function ScoreSemaphore({ score, loading }) {
 
   return (
     <div
-      className={`p-6 rounded-2xl border border-gray-200 ${theme.bg}`}
+      className="hero-card relative p-6 rounded-2xl"
+      data-verdict={verdict}
       role="status"
       aria-label={`${t("score_label")}: ${score ?? "N/A"} ${t("score_of_100")}. ${theme.label}. ${theme.desc}`}
     >
       <div className="flex items-center gap-6">
         <div
-          className={`w-32 h-32 shrink-0 rounded-full bg-white ring-8 ${theme.ring} flex flex-col items-center justify-center`}
+          className={`score-disc w-32 h-32 shrink-0 rounded-full ring-8 ${theme.ring} flex flex-col items-center justify-center`}
         >
           <span className={`text-5xl font-bold tabular-nums ${theme.text}`}>
             {score ?? "—"}
@@ -74,7 +75,7 @@ export default function ScoreSemaphore({ score, loading }) {
             <Icon className="w-7 h-7" aria-hidden />
             <span className="text-2xl font-semibold">{theme.label}</span>
           </div>
-          <p className="mt-2 text-lg text-gray-800">{theme.desc}</p>
+          <p className="mt-2 text-lg">{theme.desc}</p>
         </div>
       </div>
     </div>

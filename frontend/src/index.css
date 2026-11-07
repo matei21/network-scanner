@@ -2,22 +2,280 @@
 @tailwind components;
 @tailwind utilities;
 
+/* --- Garden theme (single, one font family) -------------------------- */
 :root {
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  font-size: 16px; /* NFR-08: minimum 16px text */
+  /* Palette tuned to the cartoon landscape (sky blue + meadow green). */
+  --bg-card: rgba(255, 255, 255, 0.95);         /* cloud-white, nearly solid */
+  --bg-card-green: rgba(230, 243, 215, 0.92);   /* light meadow */
+  --bg-raised: rgba(240, 248, 225, 0.92);
+  --text-primary: #1A2E1E;
+  --text-muted: #4E5F4C;
+  --accent: #4A8A52;                             /* fresh grass green */
+  --accent-dark: #356A3D;
+  --accent-soft: #D5E8BF;
+  --accent-contrast: #FFFFFF;
+  --sky: #9FCBEA;                                /* sky-blue accent */
+  --border: rgba(74, 138, 82, 0.3);
+  --border-strong: #4A8A52;
+  --focus-ring: #4A8A52;
+
+  /* Severity (for score hero + findings — SOLID, not transparent) */
+  --severity-safe-bg: #C8E6C9;
+  --severity-safe-text: #1B5E20;
+  --severity-safe-ring: #2E7D32;
+  --severity-watch-bg: #FFE0A3;
+  --severity-watch-text: #7A4F0B;
+  --severity-watch-ring: #B45309;
+  --severity-risk-bg: #F8C9C9;
+  --severity-risk-text: #8F1D1D;
+  --severity-risk-ring: #B91C1C;
+
+  --font-body: "Satoshi", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: "Satoshi", system-ui, sans-serif;
+
+  font-family: var(--font-body);
+  font-size: 16px; /* NFR-08 */
   color-scheme: light;
 }
 
 html, body, #root {
   height: 100%;
   margin: 0;
-  background: #f9fafb;
-  color: #111827;
 }
 
-/* Visible focus ring for keyboard navigation (NFR-08) */
+body {
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  background: #9FCBEA;  /* sky-blue fallback if image fails */
+  font-weight: 500;
+}
+
+h1, h2, h3, h4 {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+}
+
+/* Focus ring (NFR-08) */
 *:focus-visible {
-  outline: 3px solid #1d4ed8;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
   border-radius: 4px;
+}
+
+/* --- Card tinting ---------------------------------------------------- */
+/* All generic white cards get a subtle garden-green wash so the whole UI
+   reads as one palette rather than white rectangles floating on video. */
+.bg-white {
+  background-color: var(--bg-card-green) !important;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+}
+
+.bg-gray-50 {
+  background-color: var(--bg-raised) !important;
+}
+
+.bg-gray-100 {
+  background-color: var(--bg-raised) !important;
+}
+
+.border-gray-200,
+.border-gray-300 {
+  border-color: var(--border) !important;
+}
+
+.text-gray-500,
+.text-gray-600 {
+  color: var(--text-muted) !important;
+}
+.text-gray-700,
+.text-gray-800,
+.text-gray-900 {
+  color: var(--text-primary) !important;
+}
+
+/* Primary accent — forest green replaces Tailwind blue-700 */
+.bg-blue-700 {
+  background-color: var(--accent) !important;
+  color: var(--accent-contrast) !important;
+}
+.text-blue-700 {
+  color: var(--accent-dark) !important;
+}
+.border-blue-700 {
+  border-color: var(--accent) !important;
+}
+.hover\:bg-blue-800:hover {
+  background-color: var(--accent-dark) !important;
+}
+.hover\:text-blue-700:hover {
+  color: var(--accent-dark) !important;
+}
+
+/* --- Hero (score) card: SOLID severity colour per verdict ------------- */
+.hero-card {
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 2px solid var(--border);
+  box-shadow: 0 10px 28px rgba(40, 30, 10, 0.12);
+}
+
+.hero-card[data-verdict="safe"] {
+  background-color: var(--severity-safe-bg) !important;
+  border-color: var(--severity-safe-ring) !important;
+}
+.hero-card[data-verdict="watch"] {
+  background-color: var(--severity-watch-bg) !important;
+  border-color: var(--severity-watch-ring) !important;
+}
+.hero-card[data-verdict="at_risk"] {
+  background-color: var(--severity-risk-bg) !important;
+  border-color: var(--severity-risk-ring) !important;
+}
+.hero-card[data-verdict="error"] {
+  background-color: var(--bg-card) !important;
+}
+
+/* The score number circle inside the hero card: keep it on a cream disc
+   so the big number stays readable regardless of verdict tint. */
+.hero-card .score-disc {
+  background-color: var(--bg-card) !important;
+}
+
+/* --- Header menu bar: meadow-green to echo the landscape hills ------ */
+header.app-menubar {
+  background-color: #356A3D !important;    /* matches hill shadows */
+  border-bottom: 2px solid #234B2A;
+  color: #F5FAF2;
+}
+/* Inside the dark header, invert neutral utility overrides so buttons
+   and tabs stay legible on the dark background. */
+header.app-menubar .bg-white {
+  background-color: rgba(255, 253, 247, 0.12) !important;
+  color: #F5F1E4 !important;
+  border-color: rgba(245, 241, 228, 0.25) !important;
+}
+header.app-menubar .hover\:bg-gray-50:hover {
+  background-color: rgba(255, 253, 247, 0.22) !important;
+}
+header.app-menubar .border-gray-300,
+header.app-menubar .border-gray-200 {
+  border-color: rgba(245, 241, 228, 0.3) !important;
+}
+header.app-menubar .text-gray-700,
+header.app-menubar .text-gray-800,
+header.app-menubar .text-gray-900 {
+  color: #F5F1E4 !important;
+}
+header.app-menubar .text-blue-700 {
+  color: #C6D7B4 !important;  /* light sage leaf icon on dark */
+}
+header.app-menubar .bg-blue-700 {
+  background-color: #C6D7B4 !important;
+  color: #1F3A2A !important;
+}
+header.app-menubar .bg-blue-700:hover {
+  background-color: #D6E5C4 !important;
+  color: #1F3A2A !important;
+}
+/* Nav tab text (selected tab stays blue-700 → turns sage; unselected gets
+   light tint). */
+header.app-menubar [role="tab"][aria-selected="false"] {
+  color: #E8E3D3 !important;
+}
+header.app-menubar [role="tab"][aria-selected="false"]:hover {
+  background-color: rgba(255, 253, 247, 0.12) !important;
+}
+header.app-menubar [role="tab"][aria-selected="true"] {
+  background-color: #D5E8BF !important;
+  color: #234B2A !important;
+}
+
+header.app-menubar [role="tab"][aria-selected="false"] .tab-count {
+  background-color: #FFFFFF !important;
+  color: #234B2A !important;
+}
+header.app-menubar [role="tab"][aria-selected="true"] .tab-count {
+  background-color: #234B2A !important;
+  color: #FFFFFF !important;
+}
+
+/* --- Elements marked .on-video sit directly on the cartoon landscape,
+   not inside a card. The illustration is light, so dark text with a
+   white halo works better than the cream + dark-shadow we used on the
+   earlier video background. */
+.on-video,
+.on-video * {
+  color: #1A2E1E !important;
+  text-shadow:
+    0 0 6px rgba(255, 255, 255, 0.9),
+    0 0 12px rgba(255, 255, 255, 0.6),
+    0 1px 2px rgba(255, 255, 255, 1);
+}
+
+/* --- Mr. Potato floating assistant ----------------------------------- */
+.potato-launcher {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 40;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  background-color: var(--bg-card);
+  border: 2px solid var(--border-strong);
+  box-shadow: 0 8px 24px rgba(40, 30, 10, 0.2);
+  padding: 0;
+  cursor: pointer;
+  transition: transform 150ms ease, box-shadow 150ms ease;
+  display: grid;
+  place-items: center;
+  overflow: visible;
+}
+.potato-launcher:hover,
+.potato-launcher:focus-visible {
+  transform: translateY(-3px) scale(1.04);
+  box-shadow: 0 12px 28px rgba(40, 30, 10, 0.28);
+}
+.potato-launcher img {
+  width: 110px;  /* overshoots the circle so the raised hand pokes out */
+  height: auto;
+  margin-top: -4px;
+  pointer-events: none;
+}
+.potato-bubble {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background-color: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  padding: 4px 10px;
+  border-radius: 999px;
+  white-space: nowrap;
+  font-size: 0.85rem;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(40, 30, 10, 0.12);
+}
+
+.potato-drawer {
+  position: fixed;
+  bottom: 120px;
+  right: 1.25rem;
+  z-index: 40;
+  width: min(380px, calc(100vw - 2.5rem));
+  max-height: 60vh;
+  background-color: var(--bg-card);
+  border: 2px solid var(--border);
+  border-radius: 1rem;
+  box-shadow: 0 16px 48px rgba(40, 30, 10, 0.25);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+footer {
+  color: var(--text-muted) !important;
 }

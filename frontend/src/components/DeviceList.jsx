@@ -1,25 +1,33 @@
 import { useLanguage } from "../i18n/LanguageContext";
-import { deviceIcon } from "../lib/findings";
+import { deviceTypeLabel } from "../lib/findings";
+import DeviceIcon from "./DeviceIcon";
 
 function maskedMac(mac) {
   return mac || null;
 }
 
 function DeviceCard({ device, expert }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const findingsCount = device.findings?.length || 0;
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 flex gap-4 items-start">
       <div
-        className="w-14 h-14 shrink-0 rounded-full bg-gray-100 flex items-center justify-center text-3xl"
+        className="w-24 h-24 shrink-0 rounded-full bg-white border-2 flex items-center justify-center overflow-hidden"
+        style={{ borderColor: "var(--border)" }}
         aria-hidden
       >
-        {deviceIcon(device.icon || device.type)}
+        <DeviceIcon type={device.type} size={92} />
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-baseline gap-x-3">
           <span className="font-semibold text-lg">
             {device.hostname || t("no_hostname")}
+          </span>
+          <span
+            className="text-xs px-2 py-0.5 rounded-full"
+            style={{ background: "var(--accent-soft)", color: "var(--accent-dark)" }}
+          >
+            {deviceTypeLabel(device.type, lang)}
           </span>
           <span className="text-gray-600 tabular-nums">{device.ip}</span>
         </div>
@@ -86,7 +94,7 @@ export default function DeviceList({ devices, expert }) {
 
   return (
     <div className="space-y-3">
-      <div className="text-sm text-gray-700">
+      <div className="on-video text-base font-semibold">
         {list.length} {list.length === 1 ? t("device_count_one") : t("devices_count")}
       </div>
       {list.map((d) => (

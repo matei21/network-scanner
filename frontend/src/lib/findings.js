@@ -64,40 +64,55 @@ export function summarySentence(scan, lang) {
 }
 
 export function severityColorClasses(severity) {
+  // Saturated tints that mirror the hero card's severity palette, so the
+  // whole page reads at one intensity level (user feedback).
   switch (severity) {
     case "high":
       return {
-        bg: "bg-red-50",
-        border: "border-red-300",
+        bg: "bg-red-200",
+        border: "border-red-400",
         text: "text-risk-high",
         dot: "bg-risk-high",
       };
     case "medium":
       return {
-        bg: "bg-amber-50",
-        border: "border-amber-300",
+        bg: "bg-amber-200",
+        border: "border-amber-400",
         text: "text-risk-medium",
         dot: "bg-risk-medium",
       };
     case "low":
       return {
-        bg: "bg-blue-50",
-        border: "border-blue-300",
+        bg: "bg-blue-200",
+        border: "border-blue-400",
         text: "text-risk-low",
         dot: "bg-risk-low",
       };
     case "info":
     default:
       return {
-        bg: "bg-gray-50",
-        border: "border-gray-300",
+        bg: "bg-gray-200",
+        border: "border-gray-400",
         text: "text-risk-info",
         dot: "bg-risk-info",
       };
   }
 }
 
-export function deviceIcon(type) {
+// Hero card color: highest severity present in findings (not the raw score).
+// If nothing at all → safe/green. Error state short-circuits.
+export function heroVerdict(scan) {
+  if (!scan || scan.status === "error") return "error";
+  const findings = flattenFindings(scan);
+  if (findings.some((f) => f.severity === "high")) return "at_risk";
+  if (findings.some((f) => f.severity === "medium")) return "watch";
+  if (findings.some((f) => f.severity === "low" || f.severity === "info"))
+    return "watch";
+  return "safe";
+}
+
+// Emoji fallback used if the PNG at /devices/<type>.png is missing.
+export function deviceEmoji(type) {
   switch (type) {
     case "router":
       return "🌐";
@@ -120,4 +135,66 @@ export function deviceIcon(type) {
     default:
       return "❓";
   }
+}
+
+// Returns the PNG path user drops into /public/devices/<name>.png.
+// Keep names in sync with the user's icon set. pc + laptop share one icon
+// (laptop.png); nas + server share one (nas.png).
+export function deviceIconSrc(type) {
+  const name = (() => {
+    switch (type) {
+      case "router":
+      case "camera":
+      case "printer":
+      case "tv":
+      case "phone":
+      case "iot":
+      case "nas":
+      case "unknown":
+        return type;
+      case "pc":
+      case "laptop":
+        return "laptop";
+      case "server":
+        return "nas";
+      default:
+        return "unknown";
+    }
+  })();
+  return `/devices/${name}.png`;
+}
+
+// Back-compat alias used in older components.
+export const deviceIcon = deviceEmoji;
+
+// Human-readable device type label in RO / EN for the device cards.
+export function deviceTypeLabel(type, lang) {
+  const ro = {
+    router: "Ruter",
+    laptop: "Laptop",
+    pc: "Computer",
+    phone: "Telefon",
+    tv: "Televizor",
+    camera: "Camera",
+    printer: "Imprimanta",
+    iot: "Smart home",
+    nas: "NAS",
+    server: "Server",
+    unknown: "Necunoscut",
+  };
+  const en = {
+    router: "Router",
+    laptop: "Laptop",
+    pc: "PC",
+    phone: "Phone",
+    tv: "TV",
+    camera: "Camera",
+    printer: "Printer",
+    iot: "Smart home",
+    nas: "NAS",
+    server: "Server",
+    unknown: "Unknown device",
+  };
+  const dict = lang === "ro" ? ro : en;
+  return dict[type] || dict.unknown;
 }

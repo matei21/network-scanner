@@ -1,14 +1,13 @@
 import { useEffect, useState, useMemo } from "react";
 import { LanguageProvider, useLanguage } from "./i18n/LanguageContext";
 import Header from "./components/Header";
-import Tabs from "./components/Tabs";
+import VideoBackground from "./components/VideoBackground";
 import ScoreSemaphore from "./components/ScoreSemaphore";
 import DeviceList from "./components/DeviceList";
 import FindingsList from "./components/FindingsList";
 import HistoryView from "./components/HistoryView";
-import ScanControls from "./components/ScanControls";
 import ErrorBanner from "./components/ErrorBanner";
-import AssistantPanel from "./components/AssistantPanel";
+import MrPotato from "./components/MrPotato";
 import { getLatestScan, uploadXml, runLiveScan, deleteHistory } from "./lib/api";
 import { flattenFindings, summarySentence } from "./lib/findings";
 
@@ -80,32 +79,35 @@ function AppInner() {
   ];
 
   return (
-    <div className="min-h-full bg-gray-50 flex flex-col" lang={lang}>
-      <Header expert={expert} onToggleExpert={() => setExpert((v) => !v)} />
-      <main className="max-w-5xl w-full mx-auto px-4 py-5 flex-1 space-y-5">
-        <ScanControls onUpload={onUpload} onLiveScan={onLiveScan} busy={busy} />
+    <div className="min-h-full flex flex-col relative" lang={lang}>
+      <VideoBackground />
+      <Header
+        expert={expert}
+        onToggleExpert={() => setExpert((v) => !v)}
+        tab={tab}
+        onTabChange={setTab}
+        tabs={tabs}
+        onUpload={onUpload}
+        onLiveScan={onLiveScan}
+        busy={busy}
+      />
+      <main className="max-w-6xl w-full mx-auto px-4 py-5 flex-1 space-y-5">
         <ErrorBanner scan={scan} />
-        <Tabs tabs={tabs} active={tab} onChange={setTab} />
 
         {tab === "overview" && (
-          <div className="grid lg:grid-cols-3 gap-5">
-            <div className="lg:col-span-2 space-y-5">
-              <ScoreSemaphore score={scan?.score} loading={loading} />
-              {scan && scan.status !== "error" && (
-                <div className="bg-white rounded-2xl border border-gray-200 p-4">
-                  <p className="text-lg">{summarySentence(scan, lang)}</p>
-                </div>
-              )}
-              {scan && scan.status !== "error" && findingCount > 0 && (
-                <div>
-                  <h3 className="font-semibold mb-2">{t("tab_findings")}</h3>
-                  <FindingsList scan={scan} expert={expert} />
-                </div>
-              )}
-            </div>
-            <div className="lg:col-span-1">
-              <AssistantPanel scanId={scan?.scan_id} />
-            </div>
+          <div className="space-y-5">
+            <ScoreSemaphore score={scan?.score} scan={scan} loading={loading} />
+            {scan && scan.status !== "error" && (
+              <div className="bg-white rounded-2xl border border-gray-200 p-4">
+                <p className="text-lg">{summarySentence(scan, lang)}</p>
+              </div>
+            )}
+            {scan && scan.status !== "error" && findingCount > 0 && (
+              <div>
+                <h3 className="on-video font-semibold mb-2 text-xl">{t("tab_findings")}</h3>
+                <FindingsList scan={scan} expert={expert} />
+              </div>
+            )}
           </div>
         )}
 
@@ -121,9 +123,10 @@ function AppInner() {
           <HistoryView scan={scan} onDelete={onDeleteHistory} />
         )}
       </main>
-      <footer className="text-center text-xs text-gray-500 py-4">
+      <footer className="text-center text-xs py-4">
         R Systems Hackathon 2026 · Secure Networks, Simply Explained
       </footer>
+      <MrPotato scanId={scan?.scan_id} />
     </div>
   );
 }
