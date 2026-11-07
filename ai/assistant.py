@@ -43,80 +43,27 @@ class Assistant:
 
     def get_detailed_fix(self, finding_code: str, device_info: dict, language: str = "ro") -> dict:
         """
-        Cauta pe internet instructiuni specifice si genereaza fix detaliat.
-        Structura prompt-ului:
-          1. Informatii despre dispozitiv (din scan)
-          2. Sfaturi generice (mereu prezente, nu depind de search)
-          3. Instructiuni gasite online (DuckDuckGo, daca gaseste)
-          4. Cerere catre model sa combine totul in pasi simpli
+        Agentic pipeline for detailed fix:
+          1. Search Integrator agent filters DuckDuckGo results
+          2. Advisor agent combines filtered results + generic advice + template
+        Each agent gets a short focused prompt — no hallucination from prompt overload.
         """
-        vendor = device_info.get("vendor", "")
-        product = device_info.get("product", "")
-        service = device_info.get("service", "")
-        port = device_info.get("port", "?")
-        ip = device_info.get("ip", "?")
+        if self.chatbot._orchestrator:
+            return self.chatbot._orchestrator.detailed_fix(finding_code, device_info, language)
+
+        # Fallback: old monolithic path (if orchestrator failed to init)
         action = _code_to_action(finding_code)
-
-        # Sfaturi generice -- mereu prezente, indiferent de search
         generic_advice = _get_generic_advice(finding_code, language)
-
-        # Template fix steps -- fallback solid
         template = get_template(finding_code, language)
         template_steps = template["fix_steps"] if template else []
-
-        # Cautare online -- poate esua, si e OK
-        search_results = search_device_guide(vendor, product, action)
-        search_text = format_search_results(search_results)
-        has_search = len(search_results) > 0
-
-        lang_name = "romana" if language == "ro" else "engleza"
-        system_prompt = (
-            f"Esti un asistent de securitate pentru retele de casa. "
-            f"Raspunde in {lang_name} cu pasi numerotati, simplu, "
-            f"ca pentru o persoana fara cunostinte tehnice.\n\n"
-            f"REGULI:\n"
-            f"- Foloseste informatiile din sectiunile de mai jos.\n"
-            f"- Incepe cu pasul cel mai important.\n"
-            f"- Include adresa IP ({ip}) cand utilizatorul trebuie sa o scrie undeva.\n"
-            f"- Daca instructiunile online nu par relevante, ignora-le si bazeaza-te "
-            f"pe sfaturile generice.\n"
-            f"- Mentioneaza producatorul ({vendor}) cand e util.\n"
-            f"- La final, adauga: 'Daca meniul arata diferit pe dispozitivul tau, "
-            f"cauta in setari cuvintele cheie: {action}.'\n"
-            f"- Maxim 5 pasi."
+        search_results = search_device_guide(
+            device_info.get("vendor", ""), device_info.get("product", ""), action
         )
-
-        user_msg = (
-            f"=== DISPOZITIV ===\n"
-            f"Producator: {vendor}\n"
-            f"Produs: {product}\n"
-            f"Adresa IP: {ip}\n"
-            f"Serviciu: {service} pe portul {port}\n"
-            f"Problema: {finding_code}\n\n"
-            f"=== SFATURI GENERICE (valabile pentru orice dispozitiv) ===\n"
-            f"{generic_advice}\n\n"
+        result = self.ai.chat(
+            f"Scrie maxim 5 pasi de rezolvare pentru {finding_code}.",
+            f"{generic_advice}\n{format_search_results(search_results)}",
+            finding_code, language,
         )
-
-        if has_search:
-            user_msg += (
-                f"=== INSTRUCTIUNI GASITE ONLINE (pot fi specifice modelului) ===\n"
-                f"{search_text}\n\n"
-            )
-        else:
-            user_msg += (
-                f"=== INSTRUCTIUNI ONLINE ===\n"
-                f"Nu am gasit instructiuni specifice pentru acest model.\n"
-                f"Bazeaza-te pe sfaturile generice de mai sus.\n\n"
-            )
-
-        user_msg += (
-            f"=== PASI TEMPLATE (de baza) ===\n"
-            + "\n".join(f"- {s}" for s in template_steps)
-            + "\n\n"
-            f"Combina informatiile de mai sus si scrie pasii de rezolvare."
-        )
-
-        result = self.ai.chat(system_prompt, user_msg, finding_code, language)
         result["search_results"] = search_results
         result["generic_advice"] = generic_advice
         result["template_steps"] = template_steps

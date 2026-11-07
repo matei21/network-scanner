@@ -323,9 +323,17 @@ def assistant_ask(req: AskRequest):
                     "code": code,
                 })
 
-    followups = suggest_followups(scan_data, result["text"], req.language)
+    detected_lang = result.get("detected_language", req.language)
+    followups = suggest_followups(scan_data, result["text"], detected_lang)
 
-    return {"answer": result["text"], "source": result["source"], "cites": cites, "followups": followups}
+    return {
+        "answer": result["text"],
+        "source": result["source"],
+        "agent": result.get("agent", "monolithic"),
+        "detected_language": detected_lang,
+        "cites": cites,
+        "followups": followups,
+    }
 
 
 @router.post("/assistant/detailed-fix")

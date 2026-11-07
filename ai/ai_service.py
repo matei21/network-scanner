@@ -281,11 +281,25 @@ DATELE SCANULUI:
 
 
 class Chatbot:
-    """Chatbot conversational ancorat pe datele unui scan."""
+    """Chatbot conversational ancorat pe datele unui scan.
+
+    Uses AgentOrchestrator internally: routes each question to a specialized
+    agent (analyzer, explainer, advisor) with a short focused prompt, instead
+    of one monolithic prompt.  Falls back to the old single-prompt path if
+    the orchestrator import fails.
+    """
 
     def __init__(self, ai_service, scan_data):
         self.ai = ai_service
         self.scan_data = scan_data
+        self._orchestrator = None
+        try:
+            from ai.agents import AgentOrchestrator
+            self._orchestrator = AgentOrchestrator(ai_service.local, scan_data)
+        except Exception as e:
+            logger.warning("AgentOrchestrator init failed, falling back to monolithic: %s", e)
+
+        # Monolithic fallback (kept for safety)
         self.scan_context = build_scan_context(scan_data)
         self.system_prompt = CHATBOT_SYSTEM_PROMPT.format(
             scan_context=self.scan_context
@@ -294,16 +308,18 @@ class Chatbot:
 
     def ask(self, question, language="ro"):
         """Pune o intrebare chatbot-ului. Returneaza dict cu text si source."""
-        self.history.append({"role": "user", "content": question})
+        if self._orchestrator:
+            return self._orchestrator.ask(question, language)
 
+        # Monolithic fallback
+        self.history.append({"role": "user", "content": question})
         full_context = self.system_prompt
         if len(self.history) > 1:
             prev = "\n".join(
                 f"{'User' if m['role'] == 'user' else 'Assistant'}: {m['content']}"
-                for m in self.history[-6:]  # ultimele 3 schimburi
+                for m in self.history[-6:]
             )
             full_context += f"\n\nISTORIC CONVERSATIE:\n{prev}"
-
         result = self.ai.chat(full_context, question, language=language)
         self.history.append({"role": "assistant", "content": result["text"]})
         return result
@@ -311,3 +327,5 @@ class Chatbot:
     def reset(self):
         """Sterge istoricul conversatiei."""
         self.history = []
+        if self._orchestrator:
+            self._orchestrator.reset()
