@@ -1,3 +1,4 @@
+import shutil
 import uuid
 from pathlib import Path
 
@@ -167,4 +168,14 @@ def network_info():
 @router.delete("/history", response_model=DeleteResponse)
 def delete_history():
     count = db.delete_all_history()
-    return DeleteResponse(deleted=count, message=f"Deleted {count} scan(s) and all associated data.")
+    # Raw nmap XML holds unmasked MACs and hostnames, so it must go too (NFR-02).
+    files = 0
+    if SCANS_DIR.is_dir():
+        for entry in SCANS_DIR.iterdir():
+            if entry.is_dir():
+                files += sum(1 for p in entry.rglob("*") if p.is_file())
+                shutil.rmtree(entry)
+            else:
+                files += 1
+                entry.unlink()
+    return DeleteResponse(deleted=count, message=f"Deleted {count} scan(s), {files} scan file(s) and all associated data.")

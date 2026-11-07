@@ -149,5 +149,8 @@ def delete_all_history() -> int:
     conn.execute("DELETE FROM devices")
     conn.execute("DELETE FROM scans")
     conn.commit()
+    # DELETE only marks pages free; VACUUM + WAL truncate actually erase hostnames from disk (NFR-02).
+    conn.execute("VACUUM")
+    conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
     conn.close()
     return count
