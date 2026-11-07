@@ -1,14 +1,12 @@
 """
-AI Service cu 3 niveluri de fallback:
-  1. Cloud API (Claude/OpenAI) -- cel mai bun, necesita internet + API key
-  2. Model local (Qwen 2.5 3B Instruct GGUF) -- offline, decent
-  3. Template-uri statice -- instant, basic dar corect
+AI Service cu 2 niveluri de fallback:
+  1. Model local (Qwen 2.5 3B Instruct GGUF) -- offline, decent
+  2. Template-uri statice -- instant, basic dar corect
 
 Modelul local se descarca automat la prima utilizare (~2.3 GB).
 Nu se pune in git -- e in .gitignore.
 """
 
-import os
 import json
 import logging
 from pathlib import Path
@@ -52,41 +50,6 @@ def download_local_model():
     except Exception as e:
         logger.warning("Nu am putut descarca modelul: %s", e)
         return False
-
-
-class CloudLLM:
-    """Client pentru Claude API (Anthropic)."""
-
-    def __init__(self):
-        self.client = None
-        api_key = os.environ.get("ANTHROPIC_API_KEY")
-        if api_key:
-            try:
-                import anthropic
-
-                self.client = anthropic.Anthropic(api_key=api_key)
-                logger.info("Cloud LLM (Claude) initializat.")
-            except ImportError:
-                logger.warning("anthropic nu e instalat. Ruleaza: pip install anthropic")
-
-    @property
-    def available(self):
-        return self.client is not None
-
-    def chat(self, system_prompt, user_message, max_tokens=512):
-        if not self.available:
-            return None
-        try:
-            response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
-                max_tokens=max_tokens,
-                system=system_prompt,
-                messages=[{"role": "user", "content": user_message}],
-            )
-            return response.content[0].text
-        except Exception as e:
-            logger.warning("Cloud LLM error: %s", e)
-            return None
 
 
 class LocalLLM:
@@ -142,33 +105,26 @@ class LocalLLM:
 class AIService:
     """
     Serviciul principal de AI. Incearca in ordine:
-    cloud -> local -> template.
+    local -> template.
     """
 
-    def __init__(self, enable_cloud=True, enable_local=True):
-        self.cloud = CloudLLM() if enable_cloud else None
+    def __init__(self, enable_cloud=False, enable_local=True):
         self.local = LocalLLM() if enable_local else None
 
     @property
     def status(self):
         return {
-            "cloud": self.cloud.available if self.cloud else False,
+            "cloud": False,
             "local": self.local.available if self.local else False,
             "template": True,
         }
 
     def chat(self, system_prompt, user_message, finding_code=None, language="ro"):
         """
-        Trimite un mesaj la LLM. Incearca cloud, apoi local, apoi template.
+        Trimite un mesaj la LLM. Incearca local, apoi template.
         Returneaza dict cu 'text' si 'source'.
         """
-        # Nivel 1: Cloud
-        if self.cloud and self.cloud.available:
-            result = self.cloud.chat(system_prompt, user_message)
-            if result:
-                return {"text": result, "source": "cloud"}
-
-        # Nivel 2: Local
+        # Nivel 1: Local
         if self.local and self.local.available:
             result = self.local.chat(system_prompt, user_message)
             if result:

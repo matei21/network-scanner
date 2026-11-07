@@ -109,7 +109,7 @@ export default function HistoryView({ scan, onDelete }) {
           onClick={() => {
             if (window.confirm(t("history_delete_confirm"))) onDelete?.();
           }}
-          className="inline-flex items-center gap-2 px-3 py-2 border border-gray-300 rounded-lg text-gray-800 hover:bg-gray-50"
+          className="inline-flex items-center gap-2 px-3 py-2 bg-white border border-gray-300 rounded-lg text-gray-800 hover:bg-gray-50"
         >
           <Trash2 className="w-4 h-4" aria-hidden />
           {t("history_delete")}

@@ -11,15 +11,12 @@ python-multipart>=0.0.33
 aiofiles>=25.1.0
 netifaces2>=0.0.22
 
-# AI - Cloud (optional, doar daca ai API key)
-anthropic>=0.40.0
-
-# AI - Local model (optional, doar daca vrei offline)
+# AI - Local model (Qwen 2.5 3B Instruct)
 llama-cpp-python>=0.3.0
 huggingface-hub>=0.25.0
 
-# Web search (optional, pentru instructiuni specifice per device)
-duckduckgo-search>=6.0.0
+# Web search (pentru instructiuni specifice per device)
+ddgs>=9.0.0
 
 # XML parsing (mai robust decat stdlib)
 lxml>=5.0.0
