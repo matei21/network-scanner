@@ -1,12 +1,27 @@
+# Modele LLM locale (prea mari pentru git)
+models/
+*.gguf
+
+# Fisiere hackathon locale (instructiuni, date de validare)
+*.pdf
+RSH2026_public_validation_set.zip
+validation_set/
+pasi.md
+
 # Python
 __pycache__/
 *.py[cod]
+*.egg-info/
 .pytest_cache/
-.venv/
+dist/
+build/
 venv/
+.venv/
+*.egg
 
 # Secrets (NFR-01) - never commit real keys
 .env
+.env.local
 
 # Local history / privacy (NFR-02)
 *.db
@@ -18,12 +33,19 @@ results/*
 !results/.gitkeep
 
 # Packaging
-build/
-dist/
 *.spec
 
-# OS / editors
-.DS_Store
-Thumbs.db
+# IDE
 .vscode/
 .idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scan data (poate contine MAC-uri reale)
+scans/
+*.xml
+!validation_set/**/*.xml
