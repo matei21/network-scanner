@@ -1,6 +1,6 @@
 """
 Test live: verifica ca modelul Qwen 2.5 3B ruleaza si raspunde la prompt-uri.
-Ruleaza: python -m ai.test_live_model
+Ruleaza: python -m ai.run_live_model
 """
 
 import sys
