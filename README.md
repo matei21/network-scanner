@@ -35,6 +35,14 @@ gitleaks detect --source . --verbose
 Expected result: `no leaks found` (exit code 0). Last verified: 24 commits,
 no leaks.
 
+## Privacy of scan files (NFR-02)
+
+Lab scans: MAC addresses masked for privacy (NFR-02); all other data is unchanged nmap output.
+New lab scans are masked automatically by `lab/scan.ps1`; for a scan made by hand run
+`python lab/mask_macs.py data/lab` before committing (`pytest` fails otherwise).
+Raw live scans (`scans/`) are never committed and are erased by "delete my history".
+The Validation Set files are the organisers' data and are kept unchanged.
+
 
 
 Etapele in ordine

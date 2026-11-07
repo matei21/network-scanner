@@ -3,7 +3,7 @@ Lab scan (run on the SCANNER laptop, in PowerShell "Run as administrator").
 
 Uses the same nmap flags as the Validation Set files, plus the lab ports,
 rate-limited to 100 packets/second (rules of engagement).
-Saves the XML into data/lab/<Name>.xml.
+Saves the XML into data/lab/<Name>.xml with MAC addresses masked (lab\mask_macs.py).
 
 Example:
   powershell -ExecutionPolicy Bypass -File lab\scan.ps1 -Subnet 172.20.10.0/28 -Name scan_01_before -IOwnThisNetwork
@@ -60,4 +60,12 @@ $ports = "T:1-1000,1883,2121,2222,2323,6379,8080,U:53,123,161,1900,5353"
 Write-Host "Scanning $Subnet -> $outFile (this takes a few minutes)"
 nmap -sS -sU -sV --script http-title --max-rate 100 -p $ports -oX $outFile $Subnet
 
-Write-Host "Saved $outFile" -ForegroundColor Green
+# 5. Mask MAC addresses before the file can be committed (NFR-02)
+$masker = Join-Path $PSScriptRoot "mask_macs.py"
+python $masker $outFile
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "WARNING: could not mask MAC addresses in $outFile. Run: python lab\mask_macs.py $outFile" -ForegroundColor Yellow
+    exit 1
+}
+
+Write-Host "Saved $outFile (MAC addresses masked)" -ForegroundColor Green

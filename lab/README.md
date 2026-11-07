@@ -71,6 +71,13 @@ nmap -sS -sU -sV --script http-title --max-rate 100 -p T:1-1000,1883,2121,2222,2
 Without `--script http-title` there is no page title (no HTTP_ADMIN_CLEARTEXT);
 without `-sU` there are no UDP results.
 
+Then it masks the MAC addresses in the saved file (`python lab\mask_macs.py`).
+If you ran nmap yourself, mask before committing:
+```
+python lab/mask_macs.py data/lab
+```
+`pytest` fails if a lab scan in `data/lab/` still contains a full MAC address.
+
 ### 6. Before / after
 1. **Before:** `scan_01_before.xml` with everything running.
    Target laptop alone: 7 findings → score about **10** (20 if MQTT is not recognised).
