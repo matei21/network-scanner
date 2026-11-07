@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE nmaprun>
+<?xml-stylesheet href="file:///C:/Program Files (x86)/Nmap/nmap.xsl" type="text/xsl"?>
+<!-- Nmap 7.993 scan initiated Sat Nov  7 17:55:59 2026 as: &quot;C:\\Program Files (x86)\\Nmap\\nmap.exe&quot; -sS -sV -&#45;script http-title -p 21,554,2323,6379,8080 -oX D:\\sh2026\\network-scanner\\data\\lab\\scan_before.xml 10.74.130.0/24 -->
+<nmaprun scanner="nmap" args="&quot;C:\\Program Files (x86)\\Nmap\\nmap.exe&quot; -sS -sV -&#45;script http-title -p 21,554,2323,6379,8080 -oX D:\\sh2026\\network-scanner\\data\\lab\\scan_before.xml 10.74.130.0/24" start="1794066959" startstr="Sat Nov  7 17:55:59 2026" version="7.993" xmloutputversion="1.05">
+<scaninfo type="syn" protocol="tcp" numservices="5" services="21,554,2323,6379,8080"/>
+<verbose level="0"/>
+<debugging level="0"/>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.9" addrtype="ipv4"/>
+<address addr="1C:1B:B5:D7:04:42" addrtype="mac" vendor="Intel Corporate"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<hosthint><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.53" addrtype="ipv4"/>
+<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+</hosthint>
+<host starttime="1794066963" endtime="1794066965"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.9" addrtype="ipv4"/>
+<address addr="1C:1B:B5:D7:04:42" addrtype="mac" vendor="Intel Corporate"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="21"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="ftp" method="table" conf="3"/></port>
+<port protocol="tcp" portid="554"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="rtsp" method="table" conf="3"/></port>
+<port protocol="tcp" portid="2323"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="3d-nfsd" method="table" conf="3"/></port>
+<port protocol="tcp" portid="6379"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="redis" method="table" conf="3"/></port>
+<port protocol="tcp" portid="8080"><state state="filtered" reason="no-response" reason_ttl="0"/><service name="http-proxy" method="table" conf="3"/></port>
+</ports>
+<times srtt="17578" rttvar="17718" to="100000"/>
+</host>
+<host starttime="1794066963" endtime="1794066963"><status state="up" reason="arp-response" reason_ttl="0"/>
+<address addr="10.74.130.53" addrtype="ipv4"/>
+<address addr="AE:B3:1B:77:8A:1C" addrtype="mac"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="21"><state state="closed" reason="reset" reason_ttl="64"/><service name="ftp" method="table" conf="3"/></port>
+<port protocol="tcp" portid="554"><state state="closed" reason="reset" reason_ttl="64"/><service name="rtsp" method="table" conf="3"/></port>
+<port protocol="tcp" portid="2323"><state state="closed" reason="reset" reason_ttl="64"/><service name="3d-nfsd" method="table" conf="3"/></port>
+<port protocol="tcp" portid="6379"><state state="closed" reason="reset" reason_ttl="64"/><service name="redis" method="table" conf="3"/></port>
+<port protocol="tcp" portid="8080"><state state="closed" reason="reset" reason_ttl="64"/><service name="http-proxy" method="table" conf="3"/></port>
+</ports>
+<times srtt="25065" rttvar="12310" to="100000"/>
+</host>
+<host starttime="1794066965" endtime="1794066971"><status state="up" reason="localhost-response" reason_ttl="0"/>
+<address addr="10.74.130.252" addrtype="ipv4"/>
+<hostnames>
+</hostnames>
+<ports><port protocol="tcp" portid="21"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="ftp" product="vsftpd" version="3.0.2" ostype="Unix" method="probed" conf="10"><cpe>cpe:/a:vsftpd:vsftpd:3.0.2</cpe></service></port>
+<port protocol="tcp" portid="554"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="http" product="IDentifier NameTracer Pro httpd" method="probed" conf="10"/><script id="http-title" output="Site doesn&apos;t have a title."></script></port>
+<port protocol="tcp" portid="2323"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="telnet" servicefp="SF-Port2323-TCP:V=7.993%I=7%D=11/7%Time=6AEF4A15%P=i686-pc-windows-windows%r(NULL,F,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\r\n&quot;)%r(tn3270,1D,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\r\n\^@IBM-3279-4-E&quot;)%r(GenericLines,F,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\r\n&quot;)%r(GetRequest,F,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\r\n&quot;)%r(RPCCheck,F,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\r\n&quot;)%r(Help,15,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\r\nHELP\r\n&quot;)%r(SIPOptions,EE,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\r\nOPTIONS\x20sip:nm\x20SIP/2\.0\r\nVia:\x20SIP/2\.0/TCP\x20nm;branch=foo\r\nFrom:\x20&lt;sip:nm@nm&gt;;tag=root\r\nTo:\x20&lt;sip:nm2@nm2&gt;\r\nCall-ID:\x2050000\r\nCSeq:\x2042\x20OPTIONS\r\nMax-Forwards:\x2070\r\nContent-Length:\x200\r\nContact:\x20&lt;sip:nm@nm&gt;\r\nAccept:\x20application/sdp\r\n\r\n&quot;)%r(NCP,49,&quot;\xff\xfd\x01\xff\xfd\x1f\xff\xfb\x01\xff\xfb\x03\r\r\nDmdT\^@\^@\^@\x08\x20\x08\x08\x20\x08\x08\x20\x08\x08\x20\x08\x08\x20\x08\x08\x20\x08\x08\x20\x08\x08\x20\x08\x08\x20\x08\x08\x20\x08\^@\^@\^@\^A\^@\^@\^@\^@\^@&quot;);" method="probed" conf="10"/><script id="fingerprint-strings" output="&#xa;  Help: &#xa;    HELP&#xa;  NCP: &#xa;    DmdT^@^@^@&#xa;    ^@^@^@^A^@^@^@^@^@&#xa;  SIPOptions: &#xa;    OPTIONS sip:nm SIP/2.0&#xa;    Via: SIP/2.0/TCP nm;branch=foo&#xa;    From: &lt;sip:nm@nm&gt;;tag=root&#xa;    &lt;sip:nm2@nm2&gt;&#xa;    Call-ID: 50000&#xa;    CSeq: 42 OPTIONS&#xa;    Max-Forwards: 70&#xa;    Content-Length: 0&#xa;    Contact: &lt;sip:nm@nm&gt;&#xa;    Accept: application/sdp&#xa;  tn3270: &#xa;    ^@IBM-3279-4-E"><elem key="Help">&#xa;    HELP</elem>
+<elem key="NCP">&#xa;    DmdT^@^@^@&#xa;    ^@^@^@^A^@^@^@^@^@</elem>
+<elem key="SIPOptions">&#xa;    OPTIONS sip:nm SIP/2.0&#xa;    Via: SIP/2.0/TCP nm;branch=foo&#xa;    From: &lt;sip:nm@nm&gt;;tag=root&#xa;    &lt;sip:nm2@nm2&gt;&#xa;    Call-ID: 50000&#xa;    CSeq: 42 OPTIONS&#xa;    Max-Forwards: 70&#xa;    Content-Length: 0&#xa;    Contact: &lt;sip:nm@nm&gt;&#xa;    Accept: application/sdp</elem>
+<elem key="tn3270">&#xa;    ^@IBM-3279-4-E</elem>
+</script></port>
+<port protocol="tcp" portid="6379"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="redis" product="Redis key-value store" version="8.10.3" method="probed" conf="10"><cpe>cpe:/a:redislabs:redis:8.10.3</cpe></service></port>
+<port protocol="tcp" portid="8080"><state state="open" reason="syn-ack" reason_ttl="128"/><service name="http" product="nginx" version="1.31.8" method="probed" conf="10"><cpe>cpe:/a:igor_sysoev:nginx:1.31.8</cpe></service><script id="http-server-header" output="nginx/1.31.8"><elem>nginx/1.31.8</elem>
+</script><script id="http-title" output="Router Admin Login"><elem key="title">Router Admin Login</elem>
+</script></port>
+</ports>
+<times srtt="2255" rttvar="2617" to="100000"/>
+</host>
+<runstats><finished time="1794066971" timestr="Sat Nov  7 17:56:11 2026" summary="Nmap done at Sat Nov  7 17:56:11 2026; 256 IP addresses (3 hosts up) scanned in 11.63 seconds" elapsed="11.63" exit="success"/><hosts up="3" down="253" total="256"/>
+</runstats>
+</nmaprun>
