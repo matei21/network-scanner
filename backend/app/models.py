@@ -1,28 +1,6 @@
 from pydantic import BaseModel
 
 
-class DeviceOut(BaseModel):
-    ip: str
-    mac_masked: str | None = None
-    vendor: str | None = None
-    hostname: str | None = None
-    device_type: str | None = None
-
-
-class FindingOut(BaseModel):
-    ip: str
-    port: int | None = None
-    finding_code: str
-    severity: str
-
-
-class ScanResult(BaseModel):
-    scan_id: int
-    score: float | None = None
-    devices: list[DeviceOut] = []
-    findings: list[FindingOut] = []
-
-
 class ScanHistoryItem(BaseModel):
     id: int
     filename: str

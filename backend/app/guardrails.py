@@ -7,14 +7,6 @@ from typing import Any
 import netifaces
 
 
-def mask_mac(mac: str) -> str:
-    """AA:BB:CC:DD:EE:FF -> AA:BB:CC:XX:XX:XX"""
-    parts = mac.split(":")
-    if len(parts) != 6:
-        return mac
-    return ":".join(parts[:3] + ["XX", "XX", "XX"])
-
-
 def is_private(target: str) -> bool:
     try:
         addr = ipaddress.ip_address(target)

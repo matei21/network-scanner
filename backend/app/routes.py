@@ -1,95 +1,90 @@
-import csv
-import io
 import uuid
 from pathlib import Path
 
 import aiofiles
-from defusedxml import ElementTree as SafeET
 from fastapi import APIRouter, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+
+from analyzer import export
+from analyzer.models import ScanResult
+from analyzer.parser import MAX_FILE_BYTES
+from analyzer.service import analyze_file, analyze_folder, to_dict
 
 from . import database as db
-from .guardrails import detect_network, mask_mac, validate_scan_target
+from .guardrails import detect_network, validate_scan_target
 from .models import (
     DeleteResponse,
     DiffResult,
     NetworkInfo,
     ScanHistoryItem,
     ScanRequest,
-    ScanResult,
 )
 from .scanner import run_nmap_scan
 
 router = APIRouter()
 
 SCANS_DIR = Path("scans")
-SCANS_DIR.mkdir(exist_ok=True)
+RESULTS_DIR = Path("results")
 
 
-def analyze_file(path: str) -> dict:
-    """Mock analyzer — Person A will replace this with the real implementation."""
-    return {
-        "score": 90,
-        "findings": [
-            {"ip": "192.168.1.1", "port": 80, "finding_code": "HTTP_ADMIN_CLEARTEXT", "severity": "medium"},
-        ],
-        "devices": [
-            {"ip": "192.168.1.1", "mac_masked": "AA:BB:CC:XX:XX:XX", "vendor": "TP-Link", "hostname": "router", "device_type": "router"},
-        ],
-    }
+def _new_scan_dir() -> Path:
+    path = SCANS_DIR / uuid.uuid4().hex
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
-def _mask_devices(devices: list[dict]) -> list[dict]:
-    for d in devices:
-        raw_mac = d.get("mac") or d.get("mac_masked") or ""
-        d["mac_masked"] = mask_mac(raw_mac) if ":" in raw_mac and "XX" not in raw_mac else raw_mac
-        d.pop("mac", None)
-    return devices
-
-
-@router.post("/upload", response_model=ScanResult)
-async def upload_xml(file: UploadFile):
-    if not file.filename or not file.filename.endswith(".xml"):
+def _safe_xml_name(filename: str | None) -> str:
+    # Path(...).name drops any directory part, so "../../x.xml" can't escape the scan folder.
+    name = Path(filename or "").name
+    if not name.lower().endswith(".xml") or name.startswith("."):
         raise HTTPException(400, "Only .xml files are accepted.")
+    return name
 
-    safe_name = f"{uuid.uuid4().hex}_{file.filename}"
-    xml_path = SCANS_DIR / safe_name
 
-    content = await file.read()
-    try:
-        SafeET.fromstring(content)
-    except Exception:
-        raise HTTPException(400, "Invalid or malicious XML file.")
-
-    async with aiofiles.open(xml_path, "wb") as f:
+async def _save_upload(file: UploadFile, folder: Path) -> Path:
+    name = _safe_xml_name(file.filename)
+    content = await file.read(MAX_FILE_BYTES + 1)
+    if len(content) > MAX_FILE_BYTES:
+        raise HTTPException(413, f"{name}: file is larger than {MAX_FILE_BYTES // (1024 * 1024)} MB.")
+    path = folder / name
+    async with aiofiles.open(path, "wb") as f:
         await f.write(content)
+    return path
 
-    result = analyze_file(str(xml_path))
-    devices = _mask_devices(result.get("devices", []))
-    findings = result.get("findings", [])
-    score = result.get("score")
 
-    scan_id = db.save_scan(file.filename, score, str(xml_path))
-    if devices:
-        db.save_devices(scan_id, devices)
-    if findings:
-        db.save_findings(scan_id, findings)
+def _store(result: ScanResult, display_name: str, xml_path: Path) -> dict:
+    data = to_dict(result)
+    scan_id = db.save_scan(display_name, result.score, str(xml_path))
+    db.save_devices(scan_id, [
+        {"ip": d["ip"], "mac_masked": d["mac"], "vendor": d["vendor"], "hostname": d["hostname"], "device_type": d["type"]}
+        for d in data["devices"]
+    ])
+    db.save_findings(scan_id, [
+        {"ip": f.ip, "port": f.port, "finding_code": f.code, "severity": f.severity}
+        for f in result.findings
+    ])
+    data["scan_id"] = scan_id
+    return data
 
-    return ScanResult(scan_id=scan_id, score=score, devices=devices, findings=findings)
+
+@router.post("/upload")
+async def upload_xml(file: UploadFile):
+    xml_path = await _save_upload(file, _new_scan_dir())
+    result = analyze_file(xml_path)
+    if result.error:
+        raise HTTPException(422, f"Could not read {result.file}: {result.error}")
+    return _store(result, result.file, xml_path)
 
 
 @router.get("/findings/{scan_id}")
 def get_findings(scan_id: int):
-    scan = db.get_scan(scan_id)
-    if not scan:
+    if not db.get_scan(scan_id):
         raise HTTPException(404, "Scan not found.")
     return db.get_findings(scan_id)
 
 
 @router.get("/devices/{scan_id}")
 def get_devices(scan_id: int):
-    scan = db.get_scan(scan_id)
-    if not scan:
+    if not db.get_scan(scan_id):
         raise HTTPException(404, "Scan not found.")
     return db.get_devices(scan_id)
 
@@ -104,10 +99,9 @@ def get_score(scan_id: int):
 
 @router.get("/history", response_model=list[ScanHistoryItem])
 def get_history():
-    scans = db.get_all_scans()
     return [
         ScanHistoryItem(id=s["id"], filename=s["filename"], timestamp=s["timestamp"], network_score=s["network_score"])
-        for s in scans
+        for s in db.get_all_scans()
     ]
 
 
@@ -120,7 +114,7 @@ def get_diff(old_scan_id: int, new_scan_id: int):
     return db.get_diff(old_scan_id, new_scan_id)
 
 
-@router.post("/scan", response_model=ScanResult)
+@router.post("/scan")
 def live_scan(req: ScanRequest):
     net = detect_network()
     allowlist = [net["subnet"]] if net.get("subnet") else None
@@ -128,88 +122,40 @@ def live_scan(req: ScanRequest):
     if not check["allowed"]:
         raise HTTPException(403, check["reason"])
 
-    safe_name = f"{uuid.uuid4().hex}_live.xml"
-    output_path = str(SCANS_DIR / safe_name)
-    scan_result = run_nmap_scan(req.target, output_path)
+    xml_path = _new_scan_dir() / "live_scan.xml"
+    scan_result = run_nmap_scan(req.target, str(xml_path))
     if not scan_result["success"]:
-        raise HTTPException(500, scan_result.get("error", "Scan failed."))
+        raise HTTPException(500, scan_result.get("error") or "Scan failed.")
 
-    result = analyze_file(output_path)
-    devices = _mask_devices(result.get("devices", []))
-    findings = result.get("findings", [])
-    score = result.get("score")
-
-    scan_id = db.save_scan(f"live_{req.target}", score, output_path)
-    if devices:
-        db.save_devices(scan_id, devices)
-    if findings:
-        db.save_findings(scan_id, findings)
-
-    return ScanResult(scan_id=scan_id, score=score, devices=devices, findings=findings)
+    result = analyze_file(xml_path)
+    if result.error:
+        raise HTTPException(500, f"nmap output could not be read: {result.error}")
+    return _store(result, f"live_{req.target}", xml_path)
 
 
 @router.post("/batch")
 async def batch_process(files: list[UploadFile]):
-    findings_rows: list[dict] = []
-    scores_rows: list[dict] = []
-
+    folder = _new_scan_dir()
     for file in files:
-        if not file.filename or not file.filename.endswith(".xml"):
-            scores_rows.append({"file": file.filename or "unknown", "network_score": "ERROR"})
-            continue
+        await _save_upload(file, folder)
 
-        content = await file.read()
-        try:
-            SafeET.fromstring(content)
-        except Exception:
-            scores_rows.append({"file": file.filename, "network_score": "ERROR"})
-            continue
+    results = analyze_folder(folder)
+    for r in results:
+        if r.ok:
+            _store(r, r.file, folder / r.file)
 
-        safe_name = f"{uuid.uuid4().hex}_{file.filename}"
-        xml_path = SCANS_DIR / safe_name
-        async with aiofiles.open(xml_path, "wb") as f:
-            await f.write(content)
-
-        try:
-            result = analyze_file(str(xml_path))
-        except Exception:
-            scores_rows.append({"file": file.filename, "network_score": "ERROR"})
-            continue
-
-        devices = _mask_devices(result.get("devices", []))
-        findings = result.get("findings", [])
-        score = result.get("score")
-
-        scan_id = db.save_scan(file.filename, score, str(xml_path))
-        if devices:
-            db.save_devices(scan_id, devices)
-        if findings:
-            db.save_findings(scan_id, findings)
-
-        scores_rows.append({"file": file.filename, "network_score": score})
-        for f in findings:
-            findings_rows.append({
-                "file": file.filename,
-                "ip": f["ip"],
-                "port": f.get("port", ""),
-                "finding_code": f["finding_code"],
-                "severity": f["severity"],
-            })
-
-    findings_buf = io.StringIO()
-    fw = csv.DictWriter(findings_buf, fieldnames=["file", "ip", "port", "finding_code", "severity"])
-    fw.writeheader()
-    fw.writerows(findings_rows)
-
-    scores_buf = io.StringIO()
-    sw = csv.DictWriter(scores_buf, fieldnames=["file", "network_score"])
-    sw.writeheader()
-    sw.writerows(scores_rows)
+    findings_csv = RESULTS_DIR / "findings.csv"
+    scores_csv = RESULTS_DIR / "scores.csv"
+    export.write_findings_csv(results, findings_csv)
+    export.write_scores_csv(results, scores_csv)
 
     return {
-        "processed": len(files),
-        "findings_csv": findings_buf.getvalue(),
-        "scores_csv": scores_buf.getvalue(),
+        "processed": len(results),
+        "errors": [{"file": r.file, "error": r.error} for r in results if r.error],
+        "findings_csv_path": str(findings_csv),
+        "scores_csv_path": str(scores_csv),
+        "findings_csv": findings_csv.read_text(encoding="utf-8"),
+        "scores_csv": scores_csv.read_text(encoding="utf-8"),
     }
 
 

@@ -9,6 +9,7 @@ def run_nmap_scan(target: str, output_path: str, timeout: int = 300) -> dict:
     cmd = [
         "nmap",
         "-sS", "-sV", "-sU",
+        "--script", "http-title",
         "-p", "T:1-1000,U:53,123,161,1900,5353",
         "--max-rate", "100",
         "-oX", str(output),
