@@ -1,0 +1,36 @@
+{
+  "scan_id": "abc123",
+  "file": "V2_smart_home.xml",
+  "status": "ok",
+  "error": null,
+  "score": 40,
+  "devices": [
+    {
+      "ip": "192.168.1.1",
+      "mac": "50:C7:**:**:**:**",
+      "vendor": "TP-Link",
+      "hostname": "router.lan",
+      "type": "router",
+      "icon": "🌐",
+      "open_ports": [
+        {"port": 80, "protocol": "tcp", "service": "http", "product": "lighttpd", "version": "1.4"}
+      ],
+      "findings": [
+        {
+          "code": "HTTP_ADMIN_CLEARTEXT",
+          "ip": "192.168.1.1",
+          "port": 80,
+          "protocol": "tcp",
+          "severity": "medium",
+          "points": 10,
+          "evidence": "service=http, title='Router Admin Login'",
+          "explanation_ro": "...",
+          "explanation_en": "...",
+          "fix_steps_ro": ["..."],
+          "fix_steps_en": ["..."]
+        }
+      ]
+    }
+  ],
+  "history": []
+}

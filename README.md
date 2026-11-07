@@ -1,5 +1,26 @@
 # network-scanner
 
+## Setup
+
+```bash
+pip install -r requirements.txt
+python -m analyzer data/validation --out results/
+pytest
+```
+
+## Structura proiectului
+
+```
+analyzer/   A - parser XML, reguli, scor, export CSV  (python -m analyzer <folder>)
+backend/    B - FastAPI, guardrail, nmap live, istoric SQLite
+frontend/   C - UI web (mock/scan_example.json = date mock)
+ai/         D - template-uri RO/EN, LLM, fingerprinting
+docs/       api_contract.json - formatul JSON comun
+data/       validation/ (V1-V7), lab/ (scanurile noastre), test_set/ (ora 20)
+tests/      pytest + raspunsurile asteptate pentru Validation Set
+results/    findings.csv + scores.csv generate (nu se editeaza manual)
+```
+
 
 
 Etapele in ordine

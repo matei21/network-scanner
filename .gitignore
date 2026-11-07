@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+
+# Secrets (NFR-01) - never commit real keys
+.env
+
+# Local history / privacy (NFR-02)
+*.db
+*.sqlite
+*.sqlite3
+
+# Generated results (produced by the tool, never hand-edited)
+results/*
+!results/.gitkeep
+
+# Packaging
+build/
+dist/
+*.spec
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

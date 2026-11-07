@@ -1,0 +1,8 @@
+# Analyzer (Person A)
+defusedxml==0.7.1
+
+# Tests
+pytest==8.3.3
+
+# Backend (Person B) - add fastapi, uvicorn, python-multipart here
+# AI (Person D) - add the LLM SDK here
