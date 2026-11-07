@@ -5,11 +5,13 @@ import VideoBackground from "./components/VideoBackground";
 import ScoreSemaphore from "./components/ScoreSemaphore";
 import DeviceList from "./components/DeviceList";
 import FindingsList from "./components/FindingsList";
+import NetworkMap from "./components/NetworkMap";
+import MapLegend from "./components/MapLegend";
 import HistoryView from "./components/HistoryView";
 import ErrorBanner from "./components/ErrorBanner";
 import MrPotato from "./components/MrPotato";
 import { getLatestScan, uploadXml, runLiveScan, deleteHistory } from "./lib/api";
-import { flattenFindings, summarySentence } from "./lib/findings";
+import { flattenFindings, summarySentence, heroVerdict } from "./lib/findings";
 
 function AppInner() {
   const { t, lang } = useLanguage();
@@ -98,16 +100,16 @@ function AppInner() {
           <div className="space-y-5">
             <ScoreSemaphore score={scan?.score} scan={scan} loading={loading} />
             {scan && scan.status !== "error" && (
-              <div className="bg-white rounded-2xl border border-gray-200 p-4">
+              <div className="summary-card rounded-2xl p-4" data-verdict={heroVerdict(scan)}>
                 <p className="text-lg">{summarySentence(scan, lang)}</p>
               </div>
             )}
-            {scan && scan.status !== "error" && findingCount > 0 && (
-              <div>
-                <h3 className="on-video font-semibold mb-2 text-xl">{t("tab_findings")}</h3>
-                <FindingsList scan={scan} expert={expert} />
-              </div>
-            )}
+            {scan && scan.status !== "error" && (
+              <NetworkMap devices={scan?.devices || []} />
+          )}
+          {scan && scan.status !== "error" && (
+              <MapLegend devices={scan?.devices || []} />
+          )}
           </div>
         )}
 
