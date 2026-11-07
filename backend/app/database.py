@@ -1,3 +1,4 @@
+import json
 import os
 import sqlite3
 from datetime import datetime, timezone
@@ -28,7 +29,9 @@ def init_db() -> None:
             filename TEXT NOT NULL,
             timestamp TEXT NOT NULL,
             network_score REAL,
-            xml_path TEXT
+            xml_path TEXT,
+            result_json TEXT,
+            source TEXT NOT NULL DEFAULT 'real'
         );
         CREATE TABLE IF NOT EXISTS devices (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -49,16 +52,34 @@ def init_db() -> None:
             severity TEXT NOT NULL,
             FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS ports (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            scan_id INTEGER NOT NULL,
+            ip TEXT NOT NULL,
+            port INTEGER NOT NULL,
+            protocol TEXT NOT NULL,
+            service TEXT,
+            product TEXT,
+            version TEXT,
+            FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
+        );
     """)
+    # Databases created before these columns existed get them added in place.
+    columns = {row["name"] for row in conn.execute("PRAGMA table_info(scans)")}
+    if "result_json" not in columns:
+        conn.execute("ALTER TABLE scans ADD COLUMN result_json TEXT")
+    if "source" not in columns:
+        conn.execute("ALTER TABLE scans ADD COLUMN source TEXT NOT NULL DEFAULT 'real'")
     conn.commit()
     conn.close()
 
 
-def save_scan(filename: str, network_score: float | None, xml_path: str | None) -> int:
+def save_scan(filename: str, network_score: float | None, xml_path: str | None, source: str = "real") -> int:
+    """source: "real" for our own network (lab uploads, live scans), "test" for Validation/Test Set files."""
     conn = _connect()
     cur = conn.execute(
-        "INSERT INTO scans (filename, timestamp, network_score, xml_path) VALUES (?, ?, ?, ?)",
-        (filename, datetime.now(timezone.utc).isoformat(), network_score, xml_path),
+        "INSERT INTO scans (filename, timestamp, network_score, xml_path, source) VALUES (?, ?, ?, ?, ?)",
+        (filename, datetime.now(timezone.utc).isoformat(), network_score, xml_path, source),
     )
     scan_id = cur.lastrowid
     conn.commit()
@@ -86,18 +107,63 @@ def save_findings(scan_id: int, findings: list[dict]) -> None:
     conn.close()
 
 
+def save_ports(scan_id: int, ports: list[dict]) -> None:
+    conn = _connect()
+    conn.executemany(
+        "INSERT INTO ports (scan_id, ip, port, protocol, service, product, version) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [(scan_id, p["ip"], p["port"], p["protocol"], p.get("service"), p.get("product"), p.get("version")) for p in ports],
+    )
+    conn.commit()
+    conn.close()
+
+
+def save_snapshot(scan_id: int, result: dict) -> None:
+    """The full scan as returned by /upload, so it can be shown again exactly as it was."""
+    conn = _connect()
+    conn.execute("UPDATE scans SET result_json = ? WHERE id = ?", (json.dumps(result, ensure_ascii=False), scan_id))
+    conn.commit()
+    conn.close()
+
+
+def get_snapshot(scan_id: int) -> dict | None:
+    conn = _connect()
+    row = conn.execute("SELECT result_json FROM scans WHERE id = ?", (scan_id,)).fetchone()
+    conn.close()
+    return json.loads(row["result_json"]) if row and row["result_json"] else None
+
+
+def get_ports(scan_id: int) -> list[dict]:
+    conn = _connect()
+    rows = conn.execute("SELECT * FROM ports WHERE scan_id = ?", (scan_id,)).fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+
+def _scan_row(row: sqlite3.Row) -> dict:
+    scan = dict(row)
+    scan.pop("result_json", None)
+    # The column is REAL in older databases; scores are always whole numbers.
+    if scan["network_score"] is not None:
+        scan["network_score"] = int(scan["network_score"])
+    return scan
+
+
 def get_scan(scan_id: int) -> dict | None:
     conn = _connect()
     row = conn.execute("SELECT * FROM scans WHERE id = ?", (scan_id,)).fetchone()
     conn.close()
-    return dict(row) if row else None
+    return _scan_row(row) if row else None
 
 
-def get_all_scans() -> list[dict]:
+def get_all_scans(source: str | None = None) -> list[dict]:
+    """Newest first. source=None returns every scan."""
     conn = _connect()
-    rows = conn.execute("SELECT * FROM scans ORDER BY id DESC").fetchall()
+    if source is None:
+        rows = conn.execute("SELECT * FROM scans ORDER BY id DESC").fetchall()
+    else:
+        rows = conn.execute("SELECT * FROM scans WHERE source = ? ORDER BY id DESC", (source,)).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    return [_scan_row(r) for r in rows]
 
 
 def get_findings(scan_id: int) -> list[dict]:
@@ -121,6 +187,9 @@ def get_diff(old_id: int, new_id: int) -> dict:
     old_devices = {d["ip"] for d in get_devices(old_id)}
     new_devices = {d["ip"] for d in get_devices(new_id)}
 
+    old_ports = {(p["ip"], p["port"], p["protocol"]): p["service"] for p in get_ports(old_id)}
+    new_ports = {(p["ip"], p["port"], p["protocol"]): p["service"] for p in get_ports(new_id)}
+
     old_scan = get_scan(old_id)
     new_scan = get_scan(new_id)
 
@@ -139,12 +208,21 @@ def get_diff(old_id: int, new_id: int) -> dict:
         ],
         "devices_added": list(new_devices - old_devices),
         "devices_removed": list(old_devices - new_devices),
+        "ports_opened": [
+            {"ip": ip, "port": port, "protocol": proto, "service": new_ports[(ip, port, proto)]}
+            for ip, port, proto in sorted(new_ports.keys() - old_ports.keys())
+        ],
+        "ports_closed": [
+            {"ip": ip, "port": port, "protocol": proto, "service": old_ports[(ip, port, proto)]}
+            for ip, port, proto in sorted(old_ports.keys() - new_ports.keys())
+        ],
     }
 
 
 def delete_all_history() -> int:
     conn = _connect()
     count = conn.execute("SELECT COUNT(*) FROM scans").fetchone()[0]
+    conn.execute("DELETE FROM ports")
     conn.execute("DELETE FROM findings")
     conn.execute("DELETE FROM devices")
     conn.execute("DELETE FROM scans")

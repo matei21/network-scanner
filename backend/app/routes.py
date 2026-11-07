@@ -1,6 +1,7 @@
 import shutil
 import uuid
 from pathlib import Path
+from typing import Literal
 
 import aiofiles
 from fastapi import APIRouter, HTTPException, UploadFile
@@ -25,6 +26,9 @@ router = APIRouter()
 
 SCANS_DIR = Path("scans")
 RESULTS_DIR = Path("results")
+
+# "real" = our own network (lab uploads, live scans); "test" = Validation/Test Set files.
+Source = Literal["real", "test"]
 
 
 def _new_scan_dir() -> Path:
@@ -52,9 +56,10 @@ async def _save_upload(file: UploadFile, folder: Path) -> Path:
     return path
 
 
-def _store(result: ScanResult, display_name: str, xml_path: Path) -> dict:
+def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source) -> dict:
     data = to_dict(result)
-    scan_id = db.save_scan(display_name, result.score, str(xml_path))
+    data["source"] = source
+    scan_id = db.save_scan(display_name, result.score, str(xml_path), source)
     db.save_devices(scan_id, [
         {"ip": d["ip"], "mac_masked": d["mac"], "vendor": d["vendor"], "hostname": d["hostname"], "device_type": d["type"]}
         for d in data["devices"]
@@ -63,17 +68,48 @@ def _store(result: ScanResult, display_name: str, xml_path: Path) -> dict:
         {"ip": f.ip, "port": f.port, "finding_code": f.code, "severity": f.severity}
         for f in result.findings
     ])
+    db.save_ports(scan_id, [
+        {"ip": d["ip"], **p}
+        for d in data["devices"]
+        for p in d["open_ports"]
+    ])
     data["scan_id"] = scan_id
+    # Everything added to `data` before this point (e.g. explanations and fix steps) is kept for re-viewing.
+    db.save_snapshot(scan_id, data)
+    data["history"] = _score_history(source)
     return data
 
 
+def _score_history(source: str) -> list[dict]:
+    """Score trend, oldest first (FR-10). Only scans of the same source, so test files never mix with our network."""
+    return [
+        {"scan_id": s["id"], "file": s["filename"], "timestamp": s["timestamp"], "score": s["network_score"]}
+        for s in reversed(db.get_all_scans(source))
+    ]
+
+
 @router.post("/upload")
-async def upload_xml(file: UploadFile):
+async def upload_xml(file: UploadFile, source: Source = "real"):
     xml_path = await _save_upload(file, _new_scan_dir())
     result = analyze_file(xml_path)
     if result.error:
         raise HTTPException(422, f"Could not read {result.file}: {result.error}")
-    return _store(result, result.file, xml_path)
+    return _store(result, result.file, xml_path, source)
+
+
+@router.get("/scan/{scan_id}")
+def get_full_scan(scan_id: int):
+    """A past scan in the same format as /upload, so the UI can show it as if it was just scanned."""
+    scan = db.get_scan(scan_id)
+    if not scan:
+        raise HTTPException(404, "Scan not found.")
+    data = db.get_snapshot(scan_id)
+    if data is None:
+        raise HTTPException(404, "This scan was saved before full details were stored. Upload the file again.")
+    data["timestamp"] = scan["timestamp"]
+    data["source"] = scan["source"]
+    data["history"] = _score_history(scan["source"])
+    return data
 
 
 @router.get("/findings/{scan_id}")
@@ -99,19 +135,22 @@ def get_score(scan_id: int):
 
 
 @router.get("/history", response_model=list[ScanHistoryItem])
-def get_history():
+def get_history(source: Literal["real", "test", "all"] = "real"):
     return [
-        ScanHistoryItem(id=s["id"], filename=s["filename"], timestamp=s["timestamp"], network_score=s["network_score"])
-        for s in db.get_all_scans()
+        ScanHistoryItem(id=s["id"], filename=s["filename"], timestamp=s["timestamp"], network_score=s["network_score"], source=s["source"])
+        for s in db.get_all_scans(None if source == "all" else source)
     ]
 
 
 @router.get("/diff/{old_scan_id}/{new_scan_id}", response_model=DiffResult)
 def get_diff(old_scan_id: int, new_scan_id: int):
-    if not db.get_scan(old_scan_id):
+    old, new = db.get_scan(old_scan_id), db.get_scan(new_scan_id)
+    if not old:
         raise HTTPException(404, f"Scan {old_scan_id} not found.")
-    if not db.get_scan(new_scan_id):
+    if not new:
         raise HTTPException(404, f"Scan {new_scan_id} not found.")
+    if old["source"] != new["source"]:
+        raise HTTPException(400, f"Scan {old_scan_id} is '{old['source']}' and scan {new_scan_id} is '{new['source']}': only scans of the same kind can be compared.")
     return db.get_diff(old_scan_id, new_scan_id)
 
 
@@ -132,11 +171,11 @@ def live_scan(req: ScanRequest):
     result = analyze_file(xml_path)
     if result.error:
         raise HTTPException(500, f"nmap output could not be read: {result.error}")
-    return _store(result, f"live_{req.target}", xml_path)
+    return _store(result, f"live_{req.target}", xml_path, "real")
 
 
 @router.post("/batch")
-async def batch_process(files: list[UploadFile]):
+async def batch_process(files: list[UploadFile], source: Source = "test"):
     folder = _new_scan_dir()
     for file in files:
         await _save_upload(file, folder)
@@ -144,7 +183,7 @@ async def batch_process(files: list[UploadFile]):
     results = analyze_folder(folder)
     for r in results:
         if r.ok:
-            _store(r, r.file, folder / r.file)
+            _store(r, r.file, folder / r.file, source)
 
     findings_csv = RESULTS_DIR / "findings.csv"
     scores_csv = RESULTS_DIR / "scores.csv"
