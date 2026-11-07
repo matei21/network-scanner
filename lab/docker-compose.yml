@@ -1,0 +1,37 @@
+# Hotspot lab targets (Setup A + C, everything in Docker).
+# Run on the TARGET laptop only, connected only to the RSH-<team name> hotspot.
+#
+#   docker compose up -d                  # start all targets  (before scan)
+#   docker compose stop redis banners     # "fix" 4 findings   (after scan)
+#   docker compose down                   # turn everything off when you leave
+#
+# Golden rule: simulate, do not expose. No real data, shells or passwords here.
+
+services:
+  # DB_EXPOSED - empty Redis, no data stored
+  redis:
+    image: redis:7.2-alpine
+    ports: ["6379:6379"]
+    restart: "no"
+
+  # MQTT_EXPOSED - Mosquitto 1.6 (example from the brief)
+  mqtt:
+    image: eclipse-mosquitto:1.6
+    ports: ["1883:1883"]
+    restart: "no"
+
+  # HTTP_ADMIN_CLEARTEXT - plain HTTP page titled "Admin Login" (no real form)
+  admin:
+    image: nginx:1.27-alpine
+    ports: ["8080:80"]
+    volumes: ["./admin:/usr/share/nginx/html:ro"]
+    restart: "no"
+
+  # TELNET_OPEN (port 2323) + FTP_CLEARTEXT and OUTDATED_SERVICE (port 2121)
+  # Fake banners only: nothing is ever executed, every login is refused.
+  banners:
+    image: python:3.12-alpine
+    ports: ["2323:2323", "2121:2121"]
+    volumes: ["./fake_banners.py:/app/fake_banners.py:ro"]
+    command: ["python", "-u", "/app/fake_banners.py"]
+    restart: "no"
