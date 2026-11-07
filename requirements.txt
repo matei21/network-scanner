@@ -7,6 +7,9 @@ pytest==8.3.3
 # Backend (Person B)
 fastapi>=0.104.0
 uvicorn>=0.24.0
+python-multipart>=0.0.33
+aiofiles>=25.1.0
+netifaces2>=0.0.22
 
 # AI - Cloud (optional, doar daca ai API key)
 anthropic>=0.40.0

@@ -25,6 +25,9 @@ venv/
 
 # Local history / privacy (NFR-02)
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 *.sqlite
 *.sqlite3
 
