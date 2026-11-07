@@ -99,6 +99,26 @@ export async function askAssistant(question, scanId) {
   return r.json();
 }
 
+export async function getDetailedFix(findingCode, deviceIp, scanId, language = "ro") {
+  if (USE_MOCK) {
+    await sleep(500);
+    return {
+      fix_text: "1. Deschide setarile camerei in browser (192.168.1.40)\n2. Cauta Settings > Network > RTSP\n3. Activeaza Authentication\n4. Seteaza o parola puternica\n5. Verifica ca streamul nu e vizibil fara parola",
+      source: "template",
+      search_results: [{ title: "How to secure Hikvision camera RTSP", body: "Step by step guide...", href: "https://example.com" }],
+      generic_advice: "Deschide aplicatia camerei sau acceseaz-o prin browser...",
+      template_steps: ["Deschide setarile camerei", "Activeaza Authentication"],
+    };
+  }
+  const r = await fetch("/api/assistant/detailed-fix", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ finding_code: findingCode, device_ip: deviceIp, scan_id: scanId, language }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
 export async function narrateScan(scanId, language = "ro") {
   if (USE_MOCK) {
     await sleep(300);

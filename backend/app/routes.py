@@ -273,6 +273,13 @@ class AskRequest(BaseModel):
     language: str = "ro"
 
 
+class DetailedFixRequest(BaseModel):
+    finding_code: str
+    device_ip: str
+    scan_id: int | None = None
+    language: str = "ro"
+
+
 # Keep one Assistant per scan to preserve conversation history within a session.
 _assistants: dict[int, Assistant] = {}
 
@@ -319,6 +326,47 @@ def assistant_ask(req: AskRequest):
     followups = suggest_followups(scan_data, result["text"], req.language)
 
     return {"answer": result["text"], "source": result["source"], "cites": cites, "followups": followups}
+
+
+@router.post("/assistant/detailed-fix")
+def assistant_detailed_fix(req: DetailedFixRequest):
+    """Get DuckDuckGo-enriched fix instructions for a specific finding on a device."""
+    scan_id = req.scan_id
+    if scan_id is None:
+        scans = db.get_all_scans(None)
+        if not scans:
+            raise HTTPException(404, "No scans available.")
+        scan_id = scans[0]["id"]
+
+    scan_data = db.get_snapshot(scan_id)
+    if scan_data is None:
+        raise HTTPException(404, "Scan not found or has no snapshot.")
+
+    device_info = {}
+    for device in scan_data.get("devices", []):
+        if device.get("ip") == req.device_ip:
+            device_info = {"ip": device.get("ip"), "vendor": device.get("vendor", ""), "hostname": device.get("hostname", ""), "type": device.get("type", "")}
+            for finding in device.get("findings", []):
+                if finding.get("code") == req.finding_code:
+                    device_info["port"] = finding.get("port", "")
+                    device_info["service"] = finding.get("service", "")
+                    device_info["product"] = finding.get("product", "")
+                    break
+            break
+
+    if not device_info:
+        raise HTTPException(404, f"Device {req.device_ip} not found in scan.")
+
+    assistant = _get_assistant(scan_id)
+    result = assistant.get_detailed_fix(req.finding_code, device_info, req.language)
+
+    return {
+        "fix_text": result.get("text", ""),
+        "source": result.get("source", "template"),
+        "search_results": result.get("search_results", []),
+        "generic_advice": result.get("generic_advice", ""),
+        "template_steps": result.get("template_steps", []),
+    }
 
 
 @router.get("/assistant/narrate/{scan_id}")

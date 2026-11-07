@@ -25,7 +25,7 @@ def search_device_guide(vendor, product, action, max_results=3):
     query = " ".join(query.split())  # curata spatii multiple
 
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))

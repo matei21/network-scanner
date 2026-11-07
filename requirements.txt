@@ -15,8 +15,8 @@ netifaces2>=0.0.22
 llama-cpp-python>=0.3.0
 huggingface-hub>=0.25.0
 
-# Web search (optional, pentru instructiuni specifice per device)
-duckduckgo-search>=6.0.0
+# Web search (pentru instructiuni specifice per device)
+ddgs>=9.0.0
 
 # XML parsing (mai robust decat stdlib)
 lxml>=5.0.0
