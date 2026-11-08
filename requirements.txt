@@ -11,12 +11,11 @@ python-multipart>=0.0.33
 aiofiles>=25.1.0
 netifaces2>=0.0.22
 
-# AI - Local model (Qwen 2.5 3B Instruct)
-llama-cpp-python>=0.3.0
-huggingface-hub>=0.25.0
+# AI - Local model (Qwen 2.5 3B): optional, see requirements-llm.txt (python start.py --with-llm)
 
-# Web search (pentru instructiuni specifice per device)
+# Web search (pentru instructiuni specifice per device) + reading the result pages; httpx also for API tests
 ddgs>=9.0.0
+httpx>=0.27.0
 
 # PDF report generation
 fpdf2>=2.8.0

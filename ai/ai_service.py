@@ -45,7 +45,7 @@ def download_local_model():
         return True
     except ImportError:
         logger.warning(
-            "huggingface_hub nu e instalat. Ruleaza: pip install huggingface-hub"
+            "huggingface_hub nu e instalat (optional). Ruleaza: python start.py --with-llm"
         )
         return False
     except Exception as e:
@@ -65,7 +65,7 @@ class LocalLLM:
         if not LOCAL_MODEL_PATH.exists():
             logger.warning(
                 "Local model not found at %s. AI will use template fallback. "
-                "To enable local LLM, run: python -c \"from ai.ai_service import download_local_model; download_local_model()\"",
+                "To enable the optional local LLM, run: python start.py --with-llm",
                 LOCAL_MODEL_PATH,
             )
             return
@@ -82,7 +82,8 @@ class LocalLLM:
                 self._llm = llm
             logger.info("Local LLM (Qwen 2.5 3B) initializat in background.")
         except ImportError:
-            logger.warning("llama-cpp-python nu e instalat. Ruleaza: pip install llama-cpp-python")
+            logger.warning("Modelul AI local e optional si nu e instalat; se folosesc textele predefinite (sau Groq). "
+                           "Pentru el: python start.py --with-llm")
         except Exception as e:
             logger.warning("Local LLM error la incarcare: %s", e)
 

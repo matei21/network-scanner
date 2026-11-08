@@ -1,0 +1,6 @@
+# Optional: the local AI model (Qwen 2.5 3B Instruct, ~2 GB download).
+# Without it the app uses Groq (if you enter a key in the app) or its built-in texts.
+# Install with:  python start.py --with-llm
+# (or: pip install -r requirements-llm.txt --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cpu)
+llama-cpp-python>=0.3.0
+huggingface-hub>=0.25.0

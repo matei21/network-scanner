@@ -1,4 +1,6 @@
 import copy
+import re
+import unicodedata
 import logging
 import shutil
 import uuid
@@ -71,7 +73,8 @@ async def _save_upload(file: UploadFile, folder: Path) -> Path:
     return path
 
 
-def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source) -> dict:
+def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source,
+           network_name: str | None = None) -> dict:
     data = to_dict(result)
     if result.ok:
         data = enrich_scan_data(data)
@@ -79,6 +82,8 @@ def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source
         # The UI explains an unreadable file in its own language; `error` keeps the parser's technical detail.
         data["error_code"] = "unreadable"
     data["source"] = source
+    if network_name:
+        data["network_name"] = network_name  # the Wi-Fi name, known only for live scans
     scan_id = db.save_scan(display_name, result.score, str(xml_path), source)
     db.save_devices(scan_id, [
         {"ip": d["ip"], "mac_masked": d["mac"], "vendor": d["vendor"], "hostname": d["hostname"], "device_type": d["type"]}
@@ -264,12 +269,12 @@ def _apply_own_firewall(xml_path: Path) -> None:
         logger.info("%d port(s) of this laptop are blocked by NetScanner firewall rules", changed)
 
 
-def _store_live(xml_path: Path, target: str) -> dict:
+def _store_live(xml_path: Path, target: str, ssid: str | None = None) -> dict:
     _apply_own_firewall(xml_path)
     result = analyze_file(xml_path)
     if result.error:
         raise ValueError(f"nmap output could not be read: {result.error}")
-    return _store(result, f"live_{target}", xml_path, "real")
+    return _store(result, f"live_{target}", xml_path, "real", network_name=ssid)
 
 
 @router.get("/scan/live/preview")
@@ -286,7 +291,8 @@ def start_live_scan(req: ScanRequest):
         raise HTTPException(403, check["reason"])
     try:
         target = check["target"]
-        job = start_scan_job(target, _new_scan_dir() / "live_scan.xml", lambda path: _store_live(path, target))
+        ssid = check.get("ssid")
+        job = start_scan_job(target, _new_scan_dir() / "live_scan.xml", lambda path: _store_live(path, target, ssid))
     except RuntimeError:
         raise HTTPException(409, t("scan_running"))
     return _job_view(job)
@@ -327,7 +333,7 @@ def live_scan(req: ScanRequest):
     result = analyze_file(xml_path)
     if result.error:
         raise HTTPException(500, t("nmap_unreadable", detail=result.error))
-    return _store(result, f"live_{target}", xml_path, "real")
+    return _store(result, f"live_{target}", xml_path, "real", network_name=check.get("ssid"))
 
 
 def _new_batch_dir() -> Path:
@@ -608,9 +614,35 @@ def suggest_device_names(scan_id: int, language: str = "ro"):
 
 # ── PDF Report ────────────────────────────────────────────────────────
 
+def _slug(text: str, max_len: int = 40) -> str:
+    """Safe in a file name on every OS: letters, digits and dashes only."""
+    ascii_text = unicodedata.normalize("NFKD", text or "").encode("ascii", "ignore").decode()  # "ș" -> "s"
+    out = re.sub(r"[^A-Za-z0-9]+", "-", ascii_text).strip("-")
+    return out[:max_len].strip("-")
+
+
+def _network_label(data: dict) -> str:
+    """Wi-Fi name for live scans; otherwise the devices' /24 subnet (uploaded files carry no Wi-Fi name)."""
+    if data.get("network_name"):
+        return data["network_name"]
+    ips = [d.get("ip", "") for d in data.get("devices", []) if d.get("ip", "").count(".") == 3]
+    if ips:
+        return ".".join(ips[0].split(".")[:3]) + ".0-24"
+    return "retea"
+
+
+def _report_filename(data: dict, timestamp: str | None) -> str:
+    """raport_securitate_{timestamp}_{nume_retea}.pdf"""
+    try:
+        stamp = datetime.fromisoformat(timestamp).astimezone().strftime("%Y-%m-%d_%H-%M")
+    except (TypeError, ValueError):
+        stamp = datetime.now().strftime("%Y-%m-%d_%H-%M")
+    return f"raport_securitate_{stamp}_{_slug(_network_label(data)) or 'retea'}.pdf"
+
+
 @router.get("/report/pdf/{scan_id}")
-def download_pdf_report(scan_id: int, language: str = "ro"):
-    """Generate and download a PDF report for a scan."""
+def download_pdf_report(scan_id: int, language: str = "ro", inline: bool = False):
+    """The PDF report; inline=true opens it in the browser's viewer instead of downloading."""
     data = db.get_snapshot(scan_id)
     if data is None:
         raise HTTPException(404, t("no_snapshot"))
@@ -618,21 +650,22 @@ def download_pdf_report(scan_id: int, language: str = "ro"):
     if scan:
         data["timestamp"] = scan["timestamp"]
     pdf_bytes = generate_report(data, language)
-    filename = f"network_report_{scan_id}.pdf"
+    filename = _report_filename(data, data.get("timestamp"))
+    disposition = "inline" if inline else "attachment"
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f'{disposition}; filename="{filename}"'},
     )
 
 
 @router.get("/report/pdf")
-def download_pdf_report_latest(language: str = "ro"):
+def download_pdf_report_latest(language: str = "ro", inline: bool = False):
     """Generate PDF report for the latest scan."""
     scans = db.get_all_scans(None)
     if not scans:
         raise HTTPException(404, t("no_scans"))
-    return download_pdf_report(scans[0]["id"], language)
+    return download_pdf_report(scans[0]["id"], language, inline)
 
 
 # ── AI Settings ───────────────────────────────────────────────────────
