@@ -56,6 +56,7 @@ AGENT_INFO = {
     "analyzer": {"ro": ("Analistul", "analizeaza scanul"), "en": ("Analyzer", "analyzes the scan")},
     "explainer": {"ro": ("Traducatorul", "explica pe intelesul tuturor"), "en": ("Explainer", "explains in plain words")},
     "searcher": {"ro": ("Cautatorul web", "cauta pe DuckDuckGo si citeste paginile"), "en": ("Web searcher", "searches DuckDuckGo and reads pages")},
+    "query_planner": {"ro": ("Planificatorul de cautare", "reformuleaza cautarea cand rezultatele nu ajung"), "en": ("Search planner", "rewrites the search when results fall short")},
     "search_integrator": {"ro": ("Bibliotecarul", "pastreaza doar informatia utila"), "en": ("Search integrator", "keeps only useful information")},
     "advisor": {"ro": ("Tehnicianul", "scrie pasii de urmat"), "en": ("Advisor", "writes the steps to follow")},
     "technical": {"ro": ("Expertul tehnic", "CIS, OWASP, porturi, comenzi"), "en": ("Technical expert", "CIS, OWASP, ports, commands")},
@@ -111,6 +112,14 @@ SEARCH_INTEGRATOR_PROMPT = {
         "If nothing answers the question, write ONLY: IRRELEVANT. Maximum 6 lines. Answer in English."
     ),
 }
+
+QUERY_PLANNER_PROMPT = (
+    "You write web search queries. You get a user question (any language), the queries already tried and the "
+    "titles they returned, which did NOT answer the question. Write 2 NEW short English search queries "
+    "(max 8 words each) that are more likely to find an official guide or a precise answer. Keep brand and model "
+    "names exactly. Keep the user's intent EXACTLY: never change the action (e.g. reboot/restart is NOT "
+    "factory reset, disable is NOT enable). One query per line, no numbering, no quotes, nothing else."
+)
 
 ADVISOR_PROMPT = {
     "ro": (
@@ -312,7 +321,7 @@ def _mentions_product(question: str) -> bool:
     return any(b in q for b in _BRANDS)
 
 
-def plan_pipeline(question: str, scan_data: dict, expert: bool) -> dict:
+def plan_pipeline(question: str, scan_data: dict, expert: bool, allow_web: bool = False) -> dict:
     """Decide which agents run. Pure Python so it is fast, deterministic and debuggable."""
     q = question.lower()
     intent = route_question(question)
@@ -324,9 +333,12 @@ def plan_pipeline(question: str, scan_data: dict, expert: bool) -> dict:
     if not code and about_scan and intent in ("advisor", "explainer") and not product:
         code, device = _most_severe(scan_data)
 
+    # FR-12: answers come from the scan. The web is used only after the user clicks "search online".
+    offer_web = False
     if code:
         if intent == "advisor":
-            agents = (["searcher", "search_integrator"] if product else []) + ["advisor"]
+            agents = (["searcher", "search_integrator"] if product and allow_web else []) + ["advisor"]
+            offer_web = product and not allow_web
         else:
             agents = ["explainer"]
         if expert:
@@ -334,11 +346,14 @@ def plan_pipeline(question: str, scan_data: dict, expert: bool) -> dict:
         kind = "scan_finding"
     elif about_scan and not product:
         agents, kind = ["analyzer"], "scan_summary"
-    else:
+    elif allow_web:
         final = "explainer" if intent == "explainer" else "advisor"
         agents, kind = ["searcher", "search_integrator", final], "web"
+    else:
+        agents, kind, offer_web = [], "not_in_scan", True
 
-    return {"kind": kind, "intent": intent, "code": code, "device": device, "product": product, "agents": agents}
+    return {"kind": kind, "intent": intent, "code": code, "device": device, "product": product,
+            "agents": agents, "offer_web": offer_web}
 
 
 # ── Context builders (each agent gets ONLY what it needs) ────────────
@@ -525,6 +540,17 @@ def _technical_report(code: str, device: dict, lang: str) -> str:
     return "\n".join(lines)
 
 
+def _changes_intent(question: str, query: str) -> bool:
+    """A rewritten query must not turn a restart question into a factory-reset one."""
+    asked_restart = bool(_RESTART_WORDS.search(question)) and "reset" not in question.lower()
+    return asked_restart and bool(re.search(r"\b(factory|hard)?\s*reset\b", query, re.I))
+
+
+_WEB_NOTICE = {
+    "ro": "⚠ Acest raspuns NU vine din scanul tau, ci din surse de pe internet. Verifica sursele inainte sa schimbi ceva.",
+    "en": "⚠ This answer does NOT come from your scan but from internet sources. Check the sources before changing anything.",
+}
+
 _RESTART_WORDS = re.compile(r"\b(restart\w*|repornes\w*|reporni\w*|reboot\w*)\b", re.I)
 _RESET_HOLD = re.compile(r"(reset).{0,80}(\d+\s*(secunde|seconds|sec|s)\b)|(\d+\s*(secunde|seconds)).{0,80}(reset)", re.I | re.S)
 
@@ -567,19 +593,39 @@ class AgentOrchestrator:
     def llm(self):
         return self.ai.local if self.ai else None
 
-    def _llm(self, system_prompt: str, user_msg: str, max_tokens: int) -> tuple[str | None, str | None]:
-        """Groq first (fast, if the user set a key), then the local model."""
+    def _llm(self, system_prompt: str, user_msg: str, max_tokens: int,
+             lang: str | None = None) -> tuple[str | None, str | None]:
+        """Groq first (if selected with a key), then the local model.
+
+        Every answer is cleaned, trimmed back to its last complete sentence when the token limit cut it,
+        and rejected if it is too short, repetitive, in the wrong language or in another script; then the
+        next model is tried, and finally the caller's built-in template text.
+        """
+        from ai.text_quality import WRITING_RULES, clean_output, problem, trim_incomplete
+
+        if lang in WRITING_RULES:
+            system_prompt += WRITING_RULES[lang]
         for name, client in (("groq", getattr(self.ai, "groq", None)), ("local", getattr(self.ai, "local", None))):
-            if client and client.available:
-                text = client.chat(system_prompt, user_msg, max_tokens=max_tokens)
-                if text and text.strip():
-                    return text.strip(), name
+            if not (client and client.available):
+                continue
+            if hasattr(client, "chat_ex"):
+                text, finish = client.chat_ex(system_prompt, user_msg, max_tokens=max_tokens)
+            else:
+                text, finish = client.chat(system_prompt, user_msg, max_tokens=max_tokens), None
+            text = clean_output(text or "")
+            if finish == "length":
+                text = trim_incomplete(text)
+            reason = problem(text, lang)
+            if reason:
+                logger.info("Rejected %s answer (%s): %r", name, reason, text[:120])
+                continue
+            return text, name
         return None, None
 
-    def ask(self, question: str, language: str | None = None, expert: bool = False) -> dict:
+    def ask(self, question: str, language: str | None = None, expert: bool = False, allow_web: bool = False) -> dict:
         lang = language if language in ("ro", "en") else detect_language(question)
         mode = "expert" if expert else "simple"
-        plan = plan_pipeline(question, self.scan_data, expert)
+        plan = plan_pipeline(question, self.scan_data, expert, allow_web)
         code, device = plan["code"], plan["device"]
         logger.info("Agent plan: %s for: %s", plan["agents"], question[:60])
 
@@ -589,9 +635,9 @@ class AgentOrchestrator:
 
         for agent in plan["agents"]:
             if agent == "searcher":
-                search_results = self._run_searcher(question, plan, lang, steps)
+                search_results, search_summary = self._web_research(question, plan, lang, steps)
             elif agent == "search_integrator":
-                search_summary = self._run_integrator(question, search_results, lang, steps)
+                pass  # runs inside _web_research, which may search a second time
             elif agent == "analyzer":
                 self._run_analyzer(question, lang, mode, steps)
             elif agent == "explainer":
@@ -601,14 +647,21 @@ class AgentOrchestrator:
             elif agent == "technical" and code:
                 steps.append(_step("technical", lang, _technical_report(code, device, lang), "rules"))
 
-        final = next(s for s in reversed(steps) if s["agent"] not in ("technical", "orchestrator"))
+        if plan["kind"] == "not_in_scan":
+            steps.append(_step("orchestrator", lang, self._not_in_scan(lang), "rules"))
+        from_web = any(s["agent"] == "searcher" for s in steps)
+        final = next((s for s in reversed(steps) if s["agent"] not in ("technical", "orchestrator")), steps[-1])
+        if from_web:
+            final["text"] = f"{_WEB_NOTICE[lang]}\n\n{final['text']}"
         self.history += [{"role": "user", "content": question}, {"role": "assistant", "content": final["text"]}]
         return {
             "text": final["text"],
             "source": final["source"],
             "agent": final["agent"],
             "agents": steps,
-            "scan_related": plan["kind"] != "web",
+            "offer_web": plan["offer_web"],
+            "from_web": from_web,
+            "scan_related": plan["kind"] in ("scan_finding", "scan_summary"),
             "finding_code": code,
             "detected_language": lang,
             "search_results": [{"title": r.get("title", ""), "href": r.get("href", "")} for r in search_results],
@@ -620,41 +673,124 @@ class AgentOrchestrator:
             why = {
                 "scan_finding": f"Intrebarea e despre problema {plan['code']} din scanul tau.",
                 "scan_summary": "Intrebarea e despre starea generala a retelei tale scanate.",
-                "web": "Intrebarea nu e acoperita de datele scanului, asa ca o caut pe internet.",
+                "web": "Ai cerut o cautare pe internet: raspunsul NU vine din scanul tau.",
+                "not_in_scan": "Scanul tau nu contine informatia ceruta, asa ca nu folosesc niciun model AI si nu inventez.",
             }[plan["kind"]]
+            if not plan["agents"]:
+                return why
             return f"{why} Agenti: {names}."
         why = {
             "scan_finding": f"The question is about {plan['code']} from your scan.",
             "scan_summary": "The question is about the overall state of your scanned network.",
-            "web": "The scan data doesn't cover this question, so I'm searching the internet.",
+            "web": "You asked for an internet search: the answer does NOT come from your scan.",
+            "not_in_scan": "Your scan doesn't contain this information, so no AI model is used and nothing is made up.",
         }[plan["kind"]]
+        if not plan["agents"]:
+            return why
         return f"{why} Agents: {names}."
 
     # ── Agent runners (each appends its own step) ───────────────────
 
-    def _run_searcher(self, question: str, plan: dict, lang: str, steps: list) -> list:
-        from ai.search_service import research
-        from ai.assistant import _code_to_action
+    def _not_in_scan(self, lang: str) -> str:
+        devices = self.scan_data.get("devices", [])
+        n_find = sum(len(d.get("findings", [])) for d in devices)
+        if lang == "ro":
+            return (
+                "Nu pot raspunde la asta din scanul tau. Scanul arata doar ce se vede din retea: "
+                f"{len(devices)} dispozitive, porturile lor deschise si {n_find} probleme de securitate. "
+                "Nu contine parole, setari din interiorul dispozitivelor sau vulnerabilitati (CVE) care nu au fost detectate.\n"
+                "Daca vrei, apasa 'Cauta pe internet'. Raspunsul va fi marcat clar ca NU provine din scanul tau."
+            )
+        return (
+            "I can't answer this from your scan. The scan only shows what is visible on the network: "
+            f"{len(devices)} devices, their open ports and {n_find} security issues. "
+            "It contains no passwords, settings inside the devices, or vulnerabilities (CVEs) that were not detected.\n"
+            "If you want, press 'Search online'. The answer will be clearly marked as NOT coming from your scan."
+        )
 
-        query = question
-        if plan["code"]:
-            query = f"{question} {_code_to_action(plan['code'])}"
-        results = research(query)
+    def _searcher_step(self, results: list, queries: list, lang: str, steps: list, round_no: int) -> None:
         sources = [{"title": r.get("title", ""), "href": r.get("href", "")} for r in results]
         read = sum(1 for r in results if r.get("page_text"))
+        shown = ", ".join(f"«{q}»" for q in queries)
+        prefix = (f"Runda {round_no}. " if lang == "ro" else f"Round {round_no}. ") if round_no > 1 else ""
         if results:
-            text = (f"Am gasit {len(results)} rezultate si am citit {read} pagini." if lang == "ro"
-                    else f"Found {len(results)} results and read {read} pages.")
+            text = (f"{prefix}Am cautat {shown}. Am gasit {len(results)} rezultate si am citit {read} pagini." if lang == "ro"
+                    else f"{prefix}Searched {shown}. Found {len(results)} results and read {read} pages.")
         else:
-            text = ("Nu am gasit rezultate (fara internet sau cautarea a esuat)." if lang == "ro"
-                    else "No results found (offline or the search failed).")
+            text = (f"{prefix}Am cautat {shown}, dar nu am gasit rezultate (fara internet sau cautarea a esuat)." if lang == "ro"
+                    else f"{prefix}Searched {shown} but found nothing (offline or the search failed).")
         steps.append(_step("searcher", lang, text, "web", sources))
-        return results
+
+    # Small models often say "the results don't answer this" in prose instead of the IRELEVANT marker.
+    _NOT_ANSWERED = re.compile(
+        r"nu (ofera|contin|raspund|mentioneaz|exista|am gasit)|nu s-a mentionat|nu sunt relevante|nicio informatie|"
+        r"do(es)? not (provide|contain|answer|mention|include)|don't (provide|contain|answer|mention)|"
+        r"no (specific|relevant|concrete) (information|steps)|not (relevant|mentioned)",
+        re.I,
+    )
+
+    @classmethod
+    def _enough(cls, summary: str, results: list) -> bool:
+        text = (summary or "").strip()
+        head = text[:220]  # the verdict is in the first sentence; later "not" phrases may be part of real steps
+        return bool(results) and len(text) >= 80 and not cls._NOT_ANSWERED.search(head)
+
+    def _plan_queries(self, question: str, tried: list, results: list, lang: str, steps: list) -> list:
+        """Search planner agent: new queries when round 1 didn't answer the question."""
+        from ai.search_service import _keyword_query, brand_domain
+
+        tried_low = {t.lower() for t in tried}
+        titles = "\n".join(f"- {r.get('title', '')}" for r in results[:5]) or "- (none)"
+        user = (f"Question: {question}\nKey words (keep this intent): {_keyword_query(question)}\nQueries tried:\n"
+                + "\n".join(f"- {q}" for q in tried)
+                + f"\nTitles returned:\n{titles}")
+        text, source = self._llm(QUERY_PLANNER_PROMPT, user, 80)
+        queries = []
+        for line in (text or "").splitlines():
+            q = re.sub(r"^[\s\-*\d.)\"']+|[\"']+$", "", line).strip()
+            if 3 <= len(q) <= 90 and q.lower() not in tried_low and not _changes_intent(question, q):
+                queries.append(q)
+        if not queries:
+            kw = _keyword_query(question) or question
+            domain = brand_domain(question)
+            candidates = [f"{kw} how to step by step", f"{kw} official support"]
+            if domain:
+                candidates.append(f"{kw} manual site:{domain}")
+            queries, source = [c for c in candidates if c.lower() not in tried_low], "rules"
+        queries = queries[:2]
+        if queries:
+            msg = ("Rezultatele nu au raspuns la intrebare, asa ca reformulez cautarea: " if lang == "ro"
+                   else "The results didn't answer the question, so I'm rewriting the search: ")
+            steps.append(_step("query_planner", lang, msg + ", ".join(f"«{q}»" for q in queries), source or "rules"))
+        return queries
+
+    def _web_research(self, question: str, plan: dict, lang: str, steps: list) -> tuple[list, str]:
+        """Round 1: fast keyword + official-site queries. If the Librarian finds no real answer,
+        the Search planner rewrites the queries and round 2 searches pages not seen yet."""
+        from ai.search_service import research_with_queries
+        from ai.assistant import _code_to_action
+
+        base = f"{question} {_code_to_action(plan['code'])}" if plan.get("code") else question
+        results, queries = research_with_queries(base)
+        self._searcher_step(results, queries, lang, steps, 1)
+        summary = self._run_integrator(question, results, lang, steps)
+        if self._enough(summary, results):
+            return results, summary
+
+        new_queries = self._plan_queries(question, queries, results, lang, steps)
+        if not new_queries:
+            return results, summary
+        results2, _ = research_with_queries(base, queries=new_queries, exclude={r["href"] for r in results})
+        self._searcher_step(results2, new_queries, lang, steps, 2)
+        summary2 = self._run_integrator(question, results2, lang, steps) if results2 else ""
+        if summary2:
+            return results2, summary2
+        return results + results2, summary
 
     def _run_integrator(self, question: str, results: list, lang: str, steps: list) -> str:
         if not results:
             return ""
-        text, source = self._llm(SEARCH_INTEGRATOR_PROMPT[lang], _build_search_context(question, results), 300)
+        text, source = self._llm(SEARCH_INTEGRATOR_PROMPT[lang], _build_search_context(question, results), 450, lang)
         if text:
             # Small models sometimes append the "nothing relevant" marker after a useful answer.
             kept = [ln for ln in text.splitlines() if not re.fullmatch(r"\W*(IRELEVANT|IRRELEVANT)\W*", ln.strip(), re.I)]
@@ -673,7 +809,7 @@ class AgentOrchestrator:
     def _run_analyzer(self, question: str, lang: str, mode: str, steps: list) -> None:
         context = _build_analyzer_context(self.scan_data, expert=mode == "expert")
         user_msg = f"{context}\n\n{self._format_history()}{'Intrebare' if lang == 'ro' else 'Question'}: {question}"
-        text, source = self._llm(ANALYZER_PROMPT[lang] + STYLE_PLAIN[mode][lang], user_msg, 260)
+        text, source = self._llm(ANALYZER_PROMPT[lang] + STYLE_PLAIN[mode][lang], user_msg, 420, lang)
         if not text:
             from ai.assistant import narrate_scan
             text, source = narrate_scan(self.scan_data, lang).get("narrative", ""), "template"
@@ -687,7 +823,7 @@ class AgentOrchestrator:
         user_msg = f"{context}\n\n{'Intrebare' if lang == 'ro' else 'Question'}: {question}"
         text, source = (None, None)
         if code or search_summary or results:
-            text, source = self._llm(EXPLAINER_PROMPT[lang] + STYLE_PLAIN[mode][lang], user_msg, 220)
+            text, source = self._llm(EXPLAINER_PROMPT[lang] + STYLE_PLAIN[mode][lang], user_msg, 320, lang)
         if not text:
             text, source = self._explainer_fallback(code, search_summary, results, lang)
         steps.append(_step("explainer", lang, text, source))
@@ -705,7 +841,7 @@ class AgentOrchestrator:
         if code or search_summary:
             context = _build_advisor_context(question, code, device, generic, search_summary, template_steps,
                                              lang=lang, expert=mode == "expert")
-            text, source = self._llm(ADVISOR_PROMPT[lang] + STYLE[mode][lang], context, 380)
+            text, source = self._llm(ADVISOR_PROMPT[lang] + STYLE[mode][lang], context, 600, lang)
         if not text:
             text, source = self._advisor_fallback(template_steps, generic, search_summary, results, lang)
         steps.append(_step("advisor", lang, _restart_guard(question, text, lang), source))
@@ -773,9 +909,7 @@ class AgentOrchestrator:
         mode = "expert" if expert else "simple"
 
         steps: list = []
-        plan = {"code": None}
-        raw_results = self._run_searcher(question, plan, language, steps)
-        search_summary = self._run_integrator(question, raw_results, language, steps) if raw_results else ""
+        raw_results, search_summary = self._web_research(question, {"code": None}, language, steps)
         generic_advice = _get_generic_advice(finding_code, language)
         template = get_template(finding_code, language)
         template_steps = template["fix_steps"] if template else []

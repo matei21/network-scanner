@@ -92,10 +92,14 @@ class LocalLLM:
             return self._llm is not None
 
     def chat(self, system_prompt, user_message, max_tokens=512):
+        return self.chat_ex(system_prompt, user_message, max_tokens)[0]
+
+    def chat_ex(self, system_prompt, user_message, max_tokens=512):
+        """(text, finish_reason); finish_reason 'length' means the answer was cut by max_tokens."""
         with self._lock:
             llm = self._llm
         if not llm:
-            return None
+            return None, None
         try:
             with self._infer_lock:
                 response = llm.create_chat_completion(
@@ -104,12 +108,15 @@ class LocalLLM:
                         {"role": "user", "content": user_message},
                     ],
                     max_tokens=max_tokens,
-                    temperature=0.3,
+                    temperature=0.2,
+                    top_p=0.9,
+                    repeat_penalty=1.12,  # small models otherwise loop on the same sentence
                 )
-            return response["choices"][0]["message"]["content"]
+            choice = response["choices"][0]
+            return choice["message"]["content"], choice.get("finish_reason")
         except Exception as e:
             logger.warning("Local LLM error: %s", e)
-            return None
+            return None, None
 
 
 _shared_local = None
@@ -342,10 +349,10 @@ class Chatbot:
         )
         self.history = []
 
-    def ask(self, question, language="ro", expert=False):
+    def ask(self, question, language="ro", expert=False, allow_web=False):
         """Pune o intrebare chatbot-ului. Returneaza dict cu text si source."""
         if self._orchestrator:
-            return self._orchestrator.ask(question, language, expert)
+            return self._orchestrator.ask(question, language, expert, allow_web)
 
         # Monolithic fallback
         self.history.append({"role": "user", "content": question})

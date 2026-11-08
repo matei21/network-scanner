@@ -6,6 +6,8 @@ Foloseste DuckDuckGo (gratuit, fara API key).
 import html
 import logging
 import re
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
@@ -41,32 +43,101 @@ def _keyword_query(question):
     return " ".join(dict.fromkeys(out))
 
 
+_CACHE_TTL = 1800  # seconds; the same question asked twice shouldn't hit the network again
+_cache: dict[str, tuple[float, list]] = {}
+_cache_lock = threading.Lock()
+
+# Brand word in the question -> the vendor's own site, searched with "site:" for official guides.
+_BRAND_DOMAINS = {
+    "tp-link": "tp-link.com", "tplink": "tp-link.com", "archer": "tp-link.com", "deco": "tp-link.com",
+    "asus": "asus.com", "netgear": "netgear.com", "orbi": "netgear.com", "linksys": "linksys.com",
+    "d-link": "dlink.com", "dlink": "dlink.com", "huawei": "huawei.com", "zte": "zte.com.cn",
+    "xiaomi": "mi.com", "mikrotik": "mikrotik.com", "ubiquiti": "ui.com", "unifi": "ui.com",
+    "tenda": "tendacn.com", "hikvision": "hikvision.com", "dahua": "dahuasecurity.com",
+    "synology": "synology.com", "qnap": "qnap.com", "canon": "canon.com", "epson": "epson.com",
+    "brother": "brother.com", "hp ": "hp.com", "windows": "microsoft.com", "microsoft": "microsoft.com",
+    "fritz": "avm.de", "eero": "eero.com", "raspberry": "raspberrypi.com",
+}
+_JUNK_DOMAINS = ("youtube.com", "facebook.com", "pinterest.", "tiktok.com", "instagram.com", "quora.com",
+                 "amazon.", "ebay.", "aliexpress.", "emag.ro", "olx.")
+_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                  "Chrome/124.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml;q=0.9,*/*;q=0.5",
+    "Accept-Language": "en-US,en;q=0.9,ro;q=0.8",
+}
+
+
 def _ddg(query, max_results):
     from ddgs import DDGS
 
-    with DDGS() as ddgs:
-        return list(ddgs.text(query, max_results=max_results))
+    key = f"{max_results}|{query.lower()}"
+    with _cache_lock:
+        hit = _cache.get(key)
+        if hit and time.time() - hit[0] < _CACHE_TTL:
+            return hit[1]
+    with DDGS(timeout=6) as ddgs:
+        results = [
+            {"title": r.get("title", ""), "body": r.get("body", ""), "href": r.get("href", "")}
+            for r in ddgs.text(query, max_results=max_results)
+        ]
+    with _cache_lock:
+        _cache[key] = (time.time(), results)
+    return results
+
+
+def _safe_ddg(query, max_results):
+    try:
+        return _ddg(query, max_results)
+    except Exception as e:
+        logger.info("Web search '%s' failed: %s", query, e)
+        # Remember the failure for 5 minutes so a dead query isn't retried on every question.
+        with _cache_lock:
+            _cache[f"{max_results}|{query.lower()}"] = (time.time() - _CACHE_TTL + 300, [])
+        return []
+
+
+def brand_domain(text):
+    low = f" {(text or '').lower()} "
+    return next((d for word, d in _BRAND_DOMAINS.items() if word in low), None)
+
+
+def query_variants(question):
+    """Fast first-round queries: English keywords, plus the vendor's own site when a brand is named."""
+    kw = _keyword_query(question) or " ".join((question or "").split())
+    queries = [kw]
+    domain = brand_domain(question)
+    if domain:
+        queries.append(f"{kw} site:{domain}")
+    return queries
+
+
+def _host(url):
+    m = re.match(r"https?://([^/]+)", url or "")
+    return (m.group(1).lower() if m else "").removeprefix("www.")
+
+
+def _rank(results, question):
+    """Most useful first: matches the question's words, official vendor site up, video/shops/social down."""
+    kws = set(_keywords(_keyword_query(question) + " " + question))
+    domain = brand_domain(question)
+
+    def score(r):
+        title, body, host = r.get("title", "").lower(), r.get("body", "").lower(), _host(r.get("href"))
+        s = sum(2 for k in kws if k in title) + sum(1 for k in kws if k in body)
+        if domain and host.endswith(domain):
+            s += 4
+        if any(j in host for j in _JUNK_DOMAINS):
+            s -= 6
+        return s
+
+    return sorted(results, key=score, reverse=True)
 
 
 def search_web(query, max_results=4):
-    """General DuckDuckGo text search. Tries a keyword rewrite first, then the raw query."""
-    query = " ".join((query or "").split())
-    if not query:
-        return []
-    for q in dict.fromkeys([_keyword_query(query), query]):
-        if not q:
-            continue
-        try:
-            results = _ddg(q, max_results)
-        except Exception as e:
-            logger.info("Web search '%s' failed: %s", q, e)
-            continue
-        if results:
-            return [
-                {"title": r.get("title", ""), "body": r.get("body", ""), "href": r.get("href", "")}
-                for r in results
-            ]
-    return []
+    """General DuckDuckGo text search (keyword rewrite first, then the raw query)."""
+    results, _ = research_with_queries(query, max_results=max_results, pages=0)
+    return results
 
 
 def _keywords(text):
@@ -74,22 +145,34 @@ def _keywords(text):
 
 
 def _html_to_text(raw):
-    raw = re.sub(r"(?is)<(script|style|noscript|svg|nav|footer|header)[^>]*>.*?</\1>", " ", raw)
-    raw = re.sub(r"(?i)<br\s*/?>|</p>|</li>|</h\d>|</div>", "\n", raw)
+    raw = re.sub(r"(?is)<(script|style|noscript|svg|nav|footer|header|form)[^>]*>.*?</\1>", " ", raw)
+    raw = re.sub(r"(?i)<br\s*/?>|</p>|</li>|</h\d>|</div>|</tr>", "\n", raw)
     raw = re.sub(r"<[^>]+>", " ", raw)
     text = html.unescape(raw)
     lines = [" ".join(line.split()) for line in text.splitlines()]
     return "\n".join(line for line in lines if len(line) > 25)
 
 
-def fetch_page_text(url, question, max_chars=1200):
+def fetch_page_text(url, question, max_chars=1400):
     """Download a result page and keep only the lines most relevant to the question."""
     if not url or not url.startswith(("http://", "https://")):
         return ""
+    key = f"page|{url}|{question.lower()}"
+    with _cache_lock:
+        hit = _cache.get(key)
+        if hit and time.time() - hit[0] < _CACHE_TTL:
+            return hit[1]
+    text = _fetch_relevant(url, question, max_chars)
+    with _cache_lock:
+        _cache[key] = (time.time(), text)
+    return text
+
+
+def _fetch_relevant(url, question, max_chars):
     try:
         import httpx
 
-        with httpx.Client(timeout=5.0, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
+        with httpx.Client(timeout=4.0, follow_redirects=True, headers=_HEADERS) as client:
             r = client.get(url)
         if r.status_code != 200 or "html" not in r.headers.get("content-type", ""):
             return ""
@@ -107,21 +190,43 @@ def fetch_page_text(url, question, max_chars=1200):
             score += 1
         if score:
             scored.append((score, i, line))
-    best = sorted(sorted(scored, reverse=True)[:12], key=lambda t: t[1])
-    out = "\n".join(line for _, _, line in best)
-    return out[:max_chars]
+    best = sorted(sorted(scored, reverse=True)[:14], key=lambda t: t[1])
+    return "\n".join(line for _, _, line in best)[:max_chars]
 
 
-def research(question, max_results=4, pages=2):
-    """Search the web and read the top pages. Each result gets a 'page_text' excerpt."""
-    results = search_web(question, max_results=max_results)
-    if not results:
-        return []
-    focus = f"{question} {_keyword_query(question)}"
-    with ThreadPoolExecutor(max_workers=pages) as pool:
-        texts = list(pool.map(lambda r: fetch_page_text(r["href"], focus), results[:pages]))
-    for r, t in zip(results, texts):
-        r["page_text"] = t
+def research_with_queries(question, queries=None, exclude=None, max_results=4, pages=3):
+    """Run several queries in parallel, merge and rank the results, then read the top pages.
+
+    Returns (results, queries_used). Each result may carry a 'page_text' excerpt.
+    """
+    queries = [q for q in (queries or query_variants(question)) if q]
+    exclude = set(exclude or ())
+    with ThreadPoolExecutor(max_workers=max(1, len(queries))) as pool:
+        batches = list(pool.map(lambda q: _safe_ddg(q, max_results + 2), queries))
+    raw = " ".join((question or "").split())
+    if not any(batches) and raw and raw not in queries:
+        queries.append(raw)
+        batches.append(_safe_ddg(raw, max_results + 2))
+
+    merged, seen = [], set(exclude)
+    for batch in batches:
+        for r in batch:
+            if r.get("href") and r["href"] not in seen:
+                seen.add(r["href"])
+                merged.append(r)
+    results = _rank(merged, question)[:max_results]
+
+    if pages and results:
+        focus = f"{question} {_keyword_query(question)}"
+        with ThreadPoolExecutor(max_workers=pages) as pool:
+            texts = list(pool.map(lambda r: fetch_page_text(r["href"], focus), results[:pages]))
+        for r, t in zip(results, texts):
+            r["page_text"] = t
+    return results, queries
+
+
+def research(question, max_results=4, pages=3):
+    results, _ = research_with_queries(question, max_results=max_results, pages=pages)
     return results
 
 

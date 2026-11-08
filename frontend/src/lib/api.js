@@ -127,7 +127,7 @@ export async function deleteHistory() {
   return r.json();
 }
 
-export async function askAssistant(question, scanId, language, expert = false) {
+export async function askAssistant(question, scanId, language, expert = false, allowWeb = false) {
   if (USE_MOCK) {
     await sleep(400);
     return {
@@ -141,7 +141,7 @@ export async function askAssistant(question, scanId, language, expert = false) {
   const r = await fetch("/api/assistant/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, scan_id: scanId, language, expert }),
+    body: JSON.stringify({ question, scan_id: scanId, language, expert, allow_web: allowWeb }),
   });
   if (!r.ok) throw await httpError(r);
   return r.json();

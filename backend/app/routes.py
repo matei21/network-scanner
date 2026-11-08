@@ -369,6 +369,7 @@ class AskRequest(BaseModel):
     scan_id: int | None = None
     language: str = "ro"
     expert: bool = False
+    allow_web: bool = False   # FR-12: the web is searched only after the user explicitly asks for it
 
 
 class DetailedFixRequest(BaseModel):
@@ -409,7 +410,7 @@ def assistant_ask(req: AskRequest):
         scan_id = scans[0]["id"]
 
     assistant = _get_assistant(scan_id)
-    result = assistant.ask(req.question, req.language, req.expert)
+    result = assistant.ask(req.question, req.language, req.expert, req.allow_web)
     scan_related = result.get("scan_related", True)
 
     # Extract cited findings from the scan data for grounding display (NFR-06)
@@ -432,6 +433,8 @@ def assistant_ask(req: AskRequest):
         "agent": result.get("agent", "monolithic"),
         "agents": result.get("agents", []),
         "scan_related": scan_related,
+        "offer_web": result.get("offer_web", False),
+        "from_web": result.get("from_web", False),
         "detected_language": detected_lang,
         "cites": cites[:4],
         "followups": followups,

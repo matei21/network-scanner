@@ -736,3 +736,23 @@ footer {
 [data-mode="expert"] .ai-menu-input { background: #0F1C33; color: #E4F4FF; border-color: #7FBEDF; }
 [data-mode="expert"] .ai-menu-save { background-color: #7FBEDF; color: #0F2447; }
 [data-mode="expert"] .ai-menu-warn { color: #FFC978; }
+
+/* --- Dark mode: light-tinted boxes inside cards (risk scenario, status, agent blocks).
+   Text inside cards is forced light in dark mode, so these boxes need dark backgrounds too. */
+[data-mode="expert"] .bg-amber-50   { background-color: rgba(160, 100, 40, 0.35) !important; border-color: rgba(255, 201, 120, 0.55) !important; }
+[data-mode="expert"] .bg-orange-50  { background-color: rgba(170, 85, 30, 0.35) !important;  border-color: rgba(255, 180, 120, 0.55) !important; }
+[data-mode="expert"] .bg-red-50     { background-color: rgba(150, 45, 45, 0.40) !important;  border-color: rgba(255, 123, 123, 0.55) !important; }
+[data-mode="expert"] .bg-green-50,
+[data-mode="expert"] .bg-emerald-50 { background-color: rgba(40, 120, 60, 0.35) !important;  border-color: rgba(127, 218, 135, 0.55) !important; }
+[data-mode="expert"] .bg-blue-50,
+[data-mode="expert"] .bg-sky-50,
+[data-mode="expert"] .bg-indigo-50  { background-color: rgba(50, 90, 150, 0.40) !important;  border-color: rgba(127, 190, 223, 0.55) !important; }
+[data-mode="expert"] .bg-purple-50  { background-color: rgba(100, 60, 150, 0.40) !important; border-color: rgba(190, 160, 255, 0.55) !important; }
+[data-mode="expert"] .bg-gray-50,
+[data-mode="expert"] .bg-gray-100   { background-color: rgba(90, 110, 140, 0.35) !important; }
+[data-mode="expert"] :is(.bg-amber-50, .bg-orange-50, .bg-red-50, .bg-green-50, .bg-emerald-50, .bg-blue-50,
+  .bg-sky-50, .bg-indigo-50, .bg-purple-50, .bg-gray-50, .bg-gray-100),
+[data-mode="expert"] :is(.bg-amber-50, .bg-orange-50, .bg-red-50, .bg-green-50, .bg-emerald-50, .bg-blue-50,
+  .bg-sky-50, .bg-indigo-50, .bg-purple-50, .bg-gray-50, .bg-gray-100) * {
+  color: #F2F8FF !important;
+}

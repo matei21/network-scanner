@@ -41,6 +41,7 @@ const FIX_TEXT = {
     copied: "Copiat",
     output: "Rezultat",
     sources: "Surse",
+    webNote: "Pasi gasiti pe internet, NU in scanul tau. Verifica sursele.",
   },
   en: {
     here: "On this computer",
@@ -63,6 +64,7 @@ const FIX_TEXT = {
     copied: "Copied",
     output: "Output",
     sources: "Sources",
+    webNote: "Steps found on the internet, NOT in your scan. Check the sources.",
   },
 };
 
@@ -239,6 +241,10 @@ function FixPanel({ finding, lang, expert, scanId }) {
       {guide.state === "error" && <p className="text-sm text-red-700">{guide.message}</p>}
       {guide.state === "done" && (
         <div className="space-y-2">
+          <p className="flex items-start gap-1.5 rounded-md border border-amber-300 bg-amber-50 p-2 text-base text-amber-900" role="note">
+            <AlertOctagon className="w-4 h-4 shrink-0 mt-1" aria-hidden />
+            {L.webNote}
+          </p>
           {guideAgents.map((a, i) => (
             <div key={i} className="rounded-md border border-gray-200 p-2">
               <div className="text-xs font-semibold text-gray-600">{a.name} · {a.role}</div>
@@ -324,9 +330,14 @@ function FindingItem({ finding, lang, expert, isTop, scanId }) {
         >
           {finding.code}
         </code>
-        <span className="text-sm text-gray-700 inline-flex items-center gap-1.5">
+        <span className="text-base text-gray-700 inline-flex flex-wrap items-center gap-x-1.5">
           <DeviceIcon type={device?.type} size={20} />
-          {device?.hostname || device?.ip} · {t("finding_port")} {finding.port}
+          {(device?.[`type_label_${lang}`] || device?.type) && (
+            <span className="font-semibold">{device[`type_label_${lang}`] || device.type}</span>
+          )}
+          <span>{device?.hostname || device?.ip}</span>
+          {device?.hostname && <span className="text-gray-600">({device.ip})</span>}
+          {finding.port != null && <span>· {t("finding_port")} {finding.port}</span>}
         </span>
         {isTop && (
           <span className="ml-auto inline-flex items-center gap-1 text-sm text-risk-high font-semibold">
@@ -341,7 +352,7 @@ function FindingItem({ finding, lang, expert, isTop, scanId }) {
       {riskScenario && (
         <div className="mt-2 flex gap-2 items-start bg-amber-50 border border-amber-200 rounded-lg p-3">
           <AlertOctagon className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" aria-hidden />
-          <p className="text-sm text-amber-900">{riskScenario}</p>
+          <p className="text-base text-amber-900">{riskScenario}</p>
         </div>
       )}
 

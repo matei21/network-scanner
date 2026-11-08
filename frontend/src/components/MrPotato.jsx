@@ -1,10 +1,26 @@
 import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { askAssistant } from "../lib/api";
-import { X, Send, Loader2, GitBranch, Activity, BookOpen, Search, Library, Wrench, ShieldCheck, ChevronDown, ChevronUp } from "lucide-react";
+import { X, Send, Loader2, GitBranch, Activity, BookOpen, Search, Library, Wrench, ShieldCheck, ChevronDown, ChevronUp, Globe, AlertTriangle, Route } from "lucide-react";
+
+const WEB_TEXT = {
+  ro: {
+    offer: "Cauta pe internet",
+    offerHint: "Raspunsul va veni de pe internet, nu din scanul tau.",
+    banner: "Raspuns de pe internet, NU din scanul tau. Verifica sursele inainte sa schimbi ceva.",
+    asked: "Cautare pe internet",
+  },
+  en: {
+    offer: "Search online",
+    offerHint: "The answer will come from the internet, not from your scan.",
+    banner: "Answer from the internet, NOT from your scan. Check the sources before changing anything.",
+    asked: "Internet search",
+  },
+};
 
 const AGENT_STYLE = {
   orchestrator: { Icon: GitBranch, color: "text-gray-600", ring: "border-gray-200 bg-gray-50" },
+  query_planner: { Icon: Route, color: "text-orange-700", ring: "border-orange-200 bg-orange-50" },
   analyzer: { Icon: Activity, color: "text-indigo-700", ring: "border-indigo-200 bg-indigo-50" },
   explainer: { Icon: BookOpen, color: "text-emerald-700", ring: "border-emerald-200 bg-emerald-50" },
   searcher: { Icon: Search, color: "text-sky-700", ring: "border-sky-200 bg-sky-50" },
@@ -69,15 +85,25 @@ function AgentBlock({ step, lang, highlight }) {
   );
 }
 
-function AssistantMessage({ m, lang, busy, onFollowup }) {
+function AssistantMessage({ m, lang, busy, onFollowup, onSearchWeb }) {
   const [showTrace, setShowTrace] = useState(true);
+  const W = WEB_TEXT[lang] || WEB_TEXT.ro;
   const agents = m.agents || [];
   const finalIdx = agents.map((a) => a.agent).lastIndexOf(m.finalAgent);
   const trace = agents.filter((_, i) => i !== finalIdx);
-  const finalStep = agents[finalIdx];
+  // The backend prefixes web answers with a notice line; the banner below shows it instead.
+  const finalStep = agents[finalIdx] && m.fromWeb
+    ? { ...agents[finalIdx], text: agents[finalIdx].text.replace(/^⚠[^\n]*\n+/, "") }
+    : agents[finalIdx];
 
   return (
     <div className="mr-2 space-y-2">
+      {m.fromWeb && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 p-2.5 text-amber-900 text-base" role="note">
+          <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" aria-hidden />
+          <span>{W.banner}</span>
+        </div>
+      )}
       {finalStep ? (
         <AgentBlock step={finalStep} lang={lang} highlight />
       ) : (
@@ -102,6 +128,21 @@ function AssistantMessage({ m, lang, busy, onFollowup }) {
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {m.offerWeb && (
+        <div className="rounded-lg border border-sky-200 bg-sky-50 p-2.5">
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => onSearchWeb(m.question)}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-700 text-white text-base font-semibold hover:bg-sky-800 disabled:opacity-50"
+          >
+            <Globe className="w-4 h-4" aria-hidden />
+            {W.offer}
+          </button>
+          <p className="mt-1 text-base text-sky-900">{W.offerHint}</p>
         </div>
       )}
 
@@ -165,23 +206,27 @@ export default function MrPotato({ scanId, expert = false }) {
     endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [msgs, busy]);
 
-  async function send(text) {
+  async function send(text, { allowWeb = false } = {}) {
     text = text.trim();
     if (!text || busy) return;
-    setMsgs((m) => [...m, { role: "user", text }]);
+    const W = WEB_TEXT[lang] || WEB_TEXT.ro;
+    setMsgs((m) => [...m, { role: "user", text: allowWeb ? `${W.asked}: ${text}` : text }]);
     setQ("");
     setBusy(true);
     try {
-      const res = await askAssistant(text, scanId, lang, expert);
+      const res = await askAssistant(text, scanId, lang, expert, allowWeb);
       setMsgs((m) => [
         ...m,
         {
           role: "assistant",
+          question: text,
           text: res.answer,
           finalAgent: res.agent,
           agents: res.agents || [],
           cites: res.cites || [],
           followups: res.followups || [],
+          offerWeb: !!res.offer_web,
+          fromWeb: !!res.from_web,
         },
       ]);
     } catch (err) {
@@ -244,7 +289,14 @@ export default function MrPotato({ scanId, expert = false }) {
                   {m.text}
                 </div>
               ) : (
-                <AssistantMessage key={i} m={m} lang={lang} busy={busy} onFollowup={send} />
+                <AssistantMessage
+                  key={i}
+                  m={m}
+                  lang={lang}
+                  busy={busy}
+                  onFollowup={send}
+                  onSearchWeb={(question) => send(question, { allowWeb: true })}
+                />
               )
             )}
             {busy && (

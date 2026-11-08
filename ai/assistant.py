@@ -29,9 +29,9 @@ class Assistant:
         self.ai = AIService(enable_cloud=enable_cloud, enable_local=enable_local, groq_api_key=groq_api_key)
         self.chatbot = Chatbot(self.ai, scan_data)
 
-    def ask(self, question: str, language: str = "ro", expert: bool = False) -> dict:
+    def ask(self, question: str, language: str = "ro", expert: bool = False, allow_web: bool = False) -> dict:
         """Pune o intrebare despre scan. Returneaza {text, source, agents, ...}."""
-        return self.chatbot.ask(question, language, expert)
+        return self.chatbot.ask(question, language, expert, allow_web)
 
     def explain(self, finding_code: str, device_info: dict, language: str = "ro") -> dict:
         """Genereaza explicatie personalizata pentru un finding."""
@@ -570,7 +570,7 @@ def narrate_scan(scan_data: dict, language: str = "ro") -> dict:
             parts.append("Felicitari! Nu am gasit nicio problema de securitate. Reteaua ta este curata.")
         else:
             parts.append(f"Am gasit {n_findings} problem{'e' if n_findings != 1 else 'a'} de securitate"
-                         f"{f' ({high_count} critic{"e" if high_count != 1 else "a"})' if high_count else ''}.")
+                         f"{f' ({high_count} de severitate mare)' if high_count else ''}.")
 
             if high_count > 0:
                 parts.append("\nCele mai grave probleme:")
@@ -586,7 +586,10 @@ def narrate_scan(scan_data: dict, language: str = "ro") -> dict:
                 parts.append(f"\nSi {medium_count} problem{'e' if medium_count != 1 else 'a'} de severitate medie.")
 
             top = all_findings[0]
-            parts.append(f"\nRecomandare: incepe cu {top.get('code', '?')} pe {top['device_ip']} -- aceasta e cea mai urgenta.")
+            top_tmpl = get_template(top.get("code", ""), language) or {}
+            first = (top_tmpl.get("fix_steps") or ["deschide pagina Probleme si urmeaza pasii"])[0]
+            top_dev = dev_labels.get(top["device_type"], top["device_type"])
+            parts.append(f"\nIncepe cu {top_dev} ({top['device_ip']}), e cea mai urgenta problema. Primul pas: {first}.")
     else:
         parts = []
         parts.append(f"Your network has {n_devices} device{'s' if n_devices != 1 else ''} and a security score of {score}/100.")
@@ -595,7 +598,7 @@ def narrate_scan(scan_data: dict, language: str = "ro") -> dict:
             parts.append("Congratulations! No security issues found. Your network is clean.")
         else:
             parts.append(f"We found {n_findings} security issue{'s' if n_findings != 1 else ''}"
-                         f"{f' ({high_count} critical)' if high_count else ''}.")
+                         f"{f' ({high_count} high severity)' if high_count else ''}.")
 
             if high_count > 0:
                 parts.append("\nMost serious issues:")
@@ -611,7 +614,10 @@ def narrate_scan(scan_data: dict, language: str = "ro") -> dict:
                 parts.append(f"\nPlus {medium_count} medium-severity issue{'s' if medium_count != 1 else ''}.")
 
             top = all_findings[0]
-            parts.append(f"\nRecommendation: start with {top.get('code', '?')} on {top['device_ip']} -- this is the most urgent.")
+            top_tmpl = get_template(top.get("code", ""), language) or {}
+            first = (top_tmpl.get("fix_steps") or ["open the Problems page and follow the steps"])[0]
+            top_dev = dev_labels.get(top["device_type"], top["device_type"])
+            parts.append(f"\nStart with the {top_dev} ({top['device_ip']}), it is the most urgent problem. First step: {first}.")
 
     return {
         "narrative": "\n".join(parts),
