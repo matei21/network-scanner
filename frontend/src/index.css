@@ -383,3 +383,316 @@ footer {
   background-color: rgba(229, 231, 235, 0.85) !important;
   border-color: #6B7280 !important;
 }
+
+/* --- Dark mode when Avansat (expert) is on --------------------------- */
+[data-mode="expert"] {
+  --bg-card: rgba(20, 35, 60, 0.85);
+  --bg-card-green: rgba(25, 45, 65, 0.80);
+  --bg-raised: rgba(30, 50, 75, 0.80);
+  --text-primary: #E4F4FF;
+  --text-muted: #9FB5CF;
+  --accent: #7FBEDF;
+  --accent-dark: #5A99BD;
+  --accent-soft: rgba(127, 190, 223, 0.25);
+  --accent-contrast: #0F2447;
+  --border: rgba(159, 181, 207, 0.3);
+  --border-strong: #9FB5CF;
+  --focus-ring: #7FBEDF;
+}
+
+/* Header stays visible but goes deep navy */
+[data-mode="expert"] header.app-menubar {
+  background-color: #0F2447 !important;
+  border-bottom-color: #0A1A33 !important;
+}
+
+/* .on-video flips: light text with dark halo for the night sky */
+[data-mode="expert"] .on-video,
+[data-mode="expert"] .on-video * {
+  color: #E4F4FF !important;
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.85),
+    0 0 12px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 1) !important;
+}
+
+/* Hostname mini-card on the map stays readable on dark bg */
+[data-mode="expert"] .network-map span[style*="rgba(255, 255, 255, 0.75)"] {
+  background-color: rgba(15, 36, 71, 0.75) !important;
+  color: #E4F4FF !important;
+}
+
+/* ======================================================================
+   DARK MODE pentru Avansat — adaugă node palette + overrides
+   ====================================================================== */
+
+/* Node + bubble variables — folosite de hartă / modal / legendă */
+:root {
+  --node-bg-high:   rgba(248, 201, 201, 0.85);
+  --node-bg-medium: rgba(255, 224, 163, 0.85);
+  --node-bg-low:    rgba(191, 219, 254, 0.85);
+  --node-bg-info:   rgba(229, 231, 235, 0.85);
+  --node-bg-safe:   rgba(200, 230, 201, 0.85);
+  --node-ring-high:   #B91C1C;
+  --node-ring-medium: #B45309;
+  --node-ring-low:    #1D4ED8;
+  --node-ring-info:   #6B7280;
+  --node-ring-safe:   #2E7D32;
+  --bubble-bg: #FFFFFF;
+  --node-label-bg: rgba(255, 255, 255, 0.75);
+  --node-label-text: #1A2E1E;
+}
+
+.icon-bubble { background-color: var(--bubble-bg); }
+.node-label  { background-color: var(--node-label-bg); color: var(--node-label-text); }
+
+/* Score disc blends cu cardul hero */
+.hero-card .score-disc { background-color: transparent !important; }
+
+/* Legend card base (vizibil și în light mode) */
+.map-legend {
+  background: rgba(255, 255, 255, 0.75);
+  border-color: var(--border) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.map-legend .legend-label {
+  color: var(--text-primary) !important;
+  font-weight: 700;
+}
+.map-legend .legend-text {
+  color: var(--text-primary) !important;
+}
+
+/* ---- DARK MODE ---- */
+[data-mode="expert"] {
+  --bg-card: rgba(20, 35, 60, 0.85);
+  --bg-card-green: rgba(25, 45, 65, 0.80);
+  --bg-raised: rgba(30, 50, 75, 0.80);
+  --text-primary: #E4F4FF;
+  --text-muted: #B4CDE0;
+  --accent: #7FBEDF;
+  --accent-dark: #5A99BD;
+  --accent-soft: rgba(127, 190, 223, 0.25);
+  --accent-contrast: #0F2447;
+  --border: rgba(159, 181, 207, 0.4);
+  --border-strong: #7FBEDF;
+  --focus-ring: #7FBEDF;
+
+  --severity-safe-bg: rgba(46, 125, 50, 0.55);
+  --severity-safe-ring: #7FDA87;
+  --severity-watch-bg: rgba(180, 83, 9, 0.55);
+  --severity-watch-ring: #FFC978;
+  --severity-risk-bg: rgba(185, 28, 28, 0.55);
+  --severity-risk-ring: #FF7B7B;
+
+  --node-bg-high:   rgba(240, 180, 180, 0.9);
+  --node-bg-medium: rgba(250, 210, 150, 0.9);
+  --node-bg-low:    rgba(180, 210, 250, 0.9);
+  --node-bg-info:   rgba(220, 225, 235, 0.9);
+  --node-bg-safe:   rgba(190, 230, 200, 0.9);
+  --node-ring-high:   #A83333;
+  --node-ring-medium: #B37A30;
+  --node-ring-low:    #3C72BB;
+  --node-ring-info:   #5E7084;
+  --node-ring-safe:   #45944E;
+
+  --bubble-bg: rgba(210, 230, 250, 0.9);
+  --node-label-bg: rgba(210, 230, 250, 0.9);
+  --node-label-text: #0F2447;
+}
+
+/* History list — text light pe dark */
+[data-mode="expert"] .divide-y li,
+[data-mode="expert"] .divide-y li * {
+  color: #E4F4FF !important;
+}
+[data-mode="expert"] .divide-y li .text-gray-600,
+[data-mode="expert"] .divide-y li .text-gray-500 {
+  color: #B4CDE0 !important;
+}
+
+/* Header blue in dark */
+[data-mode="expert"] header.app-menubar {
+  background-color: #0F2447 !important;
+  border-bottom: 2px solid #0A1A33;
+}
+[data-mode="expert"] header.app-menubar .bg-white {
+  background-color: rgba(127, 190, 223, 0.15) !important;
+  color: #E4F4FF !important;
+  border-color: rgba(127, 190, 223, 0.35) !important;
+}
+[data-mode="expert"] header.app-menubar .text-blue-700 { color: #7FBEDF !important; }
+[data-mode="expert"] header.app-menubar .bg-blue-700 { background-color: #7FBEDF !important; color: #0F2447 !important; }
+[data-mode="expert"] header.app-menubar [role="tab"][aria-selected="false"] { color: #B4D3E8 !important; }
+[data-mode="expert"] header.app-menubar [role="tab"][aria-selected="true"] { background-color: #7FBEDF !important; color: #0F2447 !important; }
+[data-mode="expert"] header.app-menubar [role="tab"][aria-selected="false"] .tab-count { background-color: #E4F4FF !important; color: #0F2447 !important; }
+[data-mode="expert"] header.app-menubar [role="tab"][aria-selected="true"] .tab-count { background-color: #0F2447 !important; color: #E4F4FF !important; }
+
+/* on-video flips: dark halo */
+[data-mode="expert"] .on-video,
+[data-mode="expert"] .on-video * {
+  color: #E4F4FF !important;
+  text-shadow:
+    0 0 6px rgba(0, 0, 0, 0.85),
+    0 0 12px rgba(0, 0, 0, 0.55),
+    0 1px 2px rgba(0, 0, 0, 1) !important;
+}
+
+/* Router hub glow */
+[data-mode="expert"] .node-hub {
+  box-shadow: 0 0 14px rgba(255, 255, 255, 0.55), 0 4px 10px rgba(0, 0, 0, 0.5);
+}
+
+/* Legend stays pale card in dark, with dark text */
+[data-mode="expert"] .map-legend {
+  background: rgba(220, 235, 250, 0.9) !important;
+  border-color: rgba(159, 181, 207, 0.5) !important;
+}
+[data-mode="expert"] .map-legend h3,
+[data-mode="expert"] .map-legend .legend-label,
+[data-mode="expert"] .map-legend .legend-text {
+  color: #0F2447 !important;
+  text-shadow: none !important;
+}
+
+/* Mr. Potato goes navy */
+[data-mode="expert"] .potato-launcher {
+  background-color: rgba(210, 230, 250, 0.95) !important;
+  border-color: #7FBEDF !important;
+}
+[data-mode="expert"] .potato-bubble {
+  background-color: rgba(210, 230, 250, 0.95) !important;
+  color: #0F2447 !important;
+  border-color: #7FBEDF !important;
+}
+[data-mode="expert"] .potato-drawer {
+  background-color: rgba(20, 35, 60, 0.95) !important;
+  border-color: #7FBEDF !important;
+}
+[data-mode="expert"] .potato-drawer * { color: #E4F4FF !important; }
+
+/* Findings cards + fix steps in dark */
+[data-mode="expert"] .bg-red-200   { background-color: rgba(140, 50, 50, 0.55) !important; }
+[data-mode="expert"] .bg-amber-200 { background-color: rgba(160, 100, 40, 0.55) !important; }
+[data-mode="expert"] .bg-blue-200  { background-color: rgba(60, 100, 160, 0.55) !important; }
+[data-mode="expert"] .bg-gray-200  { background-color: rgba(90, 110, 140, 0.55) !important; }
+[data-mode="expert"] .bg-red-200 .bg-white,
+[data-mode="expert"] .bg-amber-200 .bg-white,
+[data-mode="expert"] .bg-blue-200 .bg-white,
+[data-mode="expert"] .bg-gray-200 .bg-white {
+  background-color: rgba(25, 40, 65, 0.6) !important;
+}
+[data-mode="expert"] .bg-red-200 *,
+[data-mode="expert"] .bg-amber-200 *,
+[data-mode="expert"] .bg-blue-200 *,
+[data-mode="expert"] .bg-gray-200 * {
+  color: #E4F4FF !important;
+}
+
+/* Icon bubble in dark */
+[data-mode="expert"] .icon-bubble {
+  background-color: var(--bubble-bg) !important;
+}
+
+/* Chart colors (for HistoryView) */
+:root {
+  --chart-bg: #FFFFFF;
+  --chart-line: #3F6B4E;
+  --chart-dashed: #86B49A;
+  --chart-label-date: #3F6B4E;
+  --chart-label-score: #1F3A2A;
+  --chart-point-fill: #FFFFFF;
+}
+[data-mode="expert"] {
+  --chart-bg: rgba(20, 35, 60, 0.85);
+  --chart-line: #7FBEDF;
+  --chart-dashed: #5A99BD;
+  --chart-label-date: #9FB5CF;
+  --chart-label-score: #E4F4FF;
+  --chart-point-fill: #0F2447;
+}
+
+/* --- Dark mode: text pe cardurile severitate (hero + summary + modal) --- */
+
+/* Număr + label severitate = aceeași culoare cu ring-ul (deschis) */
+[data-mode="expert"] .hero-card .text-risk-high,
+[data-mode="expert"] .summary-card .text-risk-high,
+[data-mode="expert"] .device-modal .text-risk-high {
+  color: #FF7B7B !important;
+}
+[data-mode="expert"] .hero-card .text-risk-medium,
+[data-mode="expert"] .summary-card .text-risk-medium,
+[data-mode="expert"] .device-modal .text-risk-medium {
+  color: #FFC978 !important;
+}
+[data-mode="expert"] .hero-card .text-risk-low,
+[data-mode="expert"] .summary-card .text-risk-low,
+[data-mode="expert"] .device-modal .text-risk-low {
+  color: #7BB7FF !important;
+}
+[data-mode="expert"] .hero-card .text-risk-safe,
+[data-mode="expert"] .summary-card .text-risk-safe,
+[data-mode="expert"] .device-modal .text-risk-safe {
+  color: #7FDA87 !important;
+}
+[data-mode="expert"] .hero-card .text-risk-info,
+[data-mode="expert"] .summary-card .text-risk-info,
+[data-mode="expert"] .device-modal .text-risk-info {
+  color: #B4CDE0 !important;
+}
+
+/* Textul descriere (nu label) din carduri severitate = alb */
+[data-mode="expert"] .hero-card p,
+[data-mode="expert"] .summary-card p {
+  color: #E4F4FF !important;
+}
+
+/* "din 100" subtext sub număr */
+[data-mode="expert"] .hero-card .text-gray-600 {
+  color: rgba(228, 244, 255, 0.75) !important;
+}
+
+/* --- Device list (+ orice bg-white card din main) — text light în dark */
+[data-mode="expert"] main .bg-white,
+[data-mode="expert"] main .bg-white * {
+  color: #E4F4FF !important;
+}
+[data-mode="expert"] main .bg-white .text-gray-600,
+[data-mode="expert"] main .bg-white .text-gray-500 {
+  color: #B4CDE0 !important;
+}
+
+/* Port chips (fundal gri dark + text light) */
+[data-mode="expert"] main .bg-gray-100,
+[data-mode="expert"] main .bg-gray-100 * {
+  color: #E4F4FF !important;
+}
+
+/* Restore severity colors on text that was accidentally whitewashed */
+[data-mode="expert"] main .bg-white .text-risk-high,
+[data-mode="expert"] main .bg-white .text-risk-high * {
+  color: #B91C1C !important;
+}
+[data-mode="expert"] main .bg-white .text-risk-medium,
+[data-mode="expert"] main .bg-white .text-risk-medium * {
+  color: #B45309 !important;
+}
+[data-mode="expert"] main .bg-white .text-risk-low,
+[data-mode="expert"] main .bg-white .text-risk-low * {
+  color: #1D4ED8 !important;
+}
+[data-mode="expert"] main .bg-white .text-risk-info,
+[data-mode="expert"] main .bg-white .text-risk-info * {
+  color: #6B7280 !important;
+}
+[data-mode="expert"] main .bg-white .text-risk-safe,
+[data-mode="expert"] main .bg-white .text-risk-safe * {
+  color: #1B5E20 !important;
+}
+
+[data-mode="expert"] .hub-label {
+  color: #FFFFFF !important;
+  background: rgba(127, 190, 223, 0.35) !important;
+}

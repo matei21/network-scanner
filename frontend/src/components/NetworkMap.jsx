@@ -38,17 +38,16 @@ function highestSeverity(findings) {
 }
 
 const SEVERITY_RING = {
-  high: "#B91C1C",
-  medium: "#B45309",
-  low: "#1D4ED8",
-  info: "#6B7280",
+  high: "var(--node-ring-high)",
+  medium: "var(--node-ring-medium)",
+  low: "var(--node-ring-low)",
+  info: "var(--node-ring-info)",
 };
-
 const SEVERITY_BG = {
-  high: "rgba(248, 201, 201, 0.85)",
-  medium: "rgba(255, 224, 163, 0.85)",
-  low: "rgba(191, 219, 254, 0.85)",
-  info: "rgba(229, 231, 235, 0.85)",
+  high: "var(--node-bg-high)",
+  medium: "var(--node-bg-medium)",
+  low: "var(--node-bg-low)",
+  info: "var(--node-bg-info)",
 };
 
 export default function NetworkMap({ devices }) {
@@ -117,7 +116,7 @@ export default function NetworkMap({ devices }) {
           >
             {positioned.map((p, i) => {
               const sev = highestSeverity(p.device.findings);
-              const stroke = sev ? SEVERITY_RING[sev] : "var(--border)";
+              const stroke = sev ? SEVERITY_RING[sev] : "var(--node-ring-safe)";
               return (
                 <line
                   key={i}
@@ -171,8 +170,8 @@ export default function NetworkMap({ devices }) {
 
 function NodeButton({ device, xPct, yPct, label, size, isHub, onClick }) {
   const sev = highestSeverity(device.findings);
-  const bg = sev ? SEVERITY_BG[sev] : "rgba(200, 230, 201, 0.85)";
-  const ring = sev ? SEVERITY_RING[sev] : "var(--border-strong)";
+  const bg = sev ? SEVERITY_BG[sev] : "var(--node-bg-safe)";
+  const ring = sev ? SEVERITY_RING[sev] : "var(--node-ring-safe)";
   const count = device.findings?.length || 0;
   return (
     <button
@@ -185,7 +184,7 @@ function NodeButton({ device, xPct, yPct, label, size, isHub, onClick }) {
       style={{ left: `${xPct}%`, top: `${yPct}%` }}
     >
       <span
-        className="rounded-full flex items-center justify-center overflow-hidden transition shadow-md group-hover:shadow-lg group-hover:scale-105"
+        className={`rounded-full flex items-center justify-center overflow-hidden transition shadow-md group-hover:shadow-lg group-hover:scale-105 ${isHub ? "node-hub" : ""}`}
         style={{
           width: size,
           height: size,
@@ -196,18 +195,14 @@ function NodeButton({ device, xPct, yPct, label, size, isHub, onClick }) {
         <DeviceIcon type={device.type} size={size - 10} />
       </span>
       <span
-        className="text-xs font-semibold whitespace-nowrap max-w-[120px] truncate px-2 py-0.5 rounded-md"
-        style={{
-          fontSize: "0.75rem",
-          backgroundColor: "rgba(255, 255, 255, 0.75)",
-          color: "#1A2E1E",
-        }}
+        className="node-label text-xs font-semibold whitespace-nowrap max-w-[120px] truncate px-2 py-0.5 rounded-md"
+        style={{ fontSize: "0.75rem" }}
       >
         {device.hostname || device.ip}
       </span>
       {isHub && (
         <span
-          className="text-[10px] uppercase tracking-wider px-1.5 rounded"
+          className="hub-label text-[10px] uppercase tracking-wider px-1.5 rounded"
           style={{
             background: "var(--accent-soft)",
             color: "var(--accent-dark)",
