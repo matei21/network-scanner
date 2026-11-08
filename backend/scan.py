@@ -19,7 +19,7 @@ from pathlib import Path
 from analyzer import export
 from analyzer.service import analyze_file
 
-from .app.guardrails import build_allowlist, detect_network, validate_scan_target
+from .app.guardrails import build_allowlist, check_ssid, detect_network, validate_scan_target, wifi_ssid
 from .app.scanner import run_nmap_scan
 
 
@@ -40,6 +40,8 @@ def main(argv: list[str] | None = None) -> int:
     allowlist = build_allowlist(net.get("subnet"))
     target = args.target or net.get("subnet") or ""
     check = validate_scan_target(target, allowlist=allowlist, confirmed=args.confirm)
+    if check["allowed"] or check.get("code") == "not_confirmed":
+        check = check_ssid(wifi_ssid()) or check
     if not check["allowed"]:
         print(f"REFUSED: {check['reason']}")
         return 2

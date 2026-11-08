@@ -22,7 +22,7 @@ from ai.fix_commands import get_fix_command, FIX_COMMANDS
 
 from . import database as db
 from . import fix_runner
-from .guardrails import build_allowlist, detect_network, validate_scan_target
+from .guardrails import build_allowlist, check_ssid, detect_network, parse_target, validate_scan_target, wifi_ssid
 from .models import (
     DeleteResponse,
     DiffResult,
@@ -30,7 +30,7 @@ from .models import (
     ScanHistoryItem,
     ScanRequest,
 )
-from .scanner import run_nmap_scan
+from .scanner import get_scan_job, run_nmap_scan, start_scan_job
 
 logger = logging.getLogger(__name__)
 
@@ -209,24 +209,84 @@ def get_diff(old_scan_id: int, new_scan_id: int):
     return db.get_diff(old_scan_id, new_scan_id)
 
 
-@router.post("/scan")
-def live_scan(req: ScanRequest):
+def _live_check(requested_target: str | None, confirmed: bool) -> dict:
+    """Every guardrail a live scan must pass. Same answer for the preview, the button and POST /scan."""
     net = detect_network()
+    # No target from the UI button = scan the network we are connected to, like `python -m backend.scan --confirm`.
+    target = (requested_target or net.get("subnet") or "").strip()
     # Empty allowlist (network not detected) -> validate_scan_target refuses (fail closed).
-    allowlist = build_allowlist(net.get("subnet"))
-    check = validate_scan_target(req.target, allowlist=allowlist, confirmed=req.confirm)
+    check = validate_scan_target(target, allowlist=build_allowlist(net.get("subnet")), confirmed=confirmed)
+    ssid = wifi_ssid()
+    if check["allowed"] or check.get("code") == "not_confirmed":
+        check = check_ssid(ssid) or check
+    if check["allowed"]:
+        net_ = parse_target(target)  # canonical form, the only thing nmap ever receives
+        target = str(net_.network_address) if net_.prefixlen == 32 else str(net_)
+    return {**check, "target": target, "ssid": ssid, "subnet": net.get("subnet")}
+
+
+def _store_live(xml_path: Path, target: str) -> dict:
+    result = analyze_file(xml_path)
+    if result.error:
+        raise ValueError(f"nmap output could not be read: {result.error}")
+    return _store(result, f"live_{target}", xml_path, "real")
+
+
+@router.get("/scan/live/preview")
+def live_scan_preview(target: str | None = None):
+    """What the scan button would scan and on which Wi-Fi; never scans."""
+    return _live_check(target, confirmed=True)
+
+
+@router.post("/scan/live", status_code=202)
+def start_live_scan(req: ScanRequest):
+    """Start a live scan in the background; poll GET /scan/live/{job_id} for progress."""
+    check = _live_check(req.target, req.confirm)
     if not check["allowed"]:
         raise HTTPException(403, check["reason"])
+    try:
+        target = check["target"]
+        job = start_scan_job(target, _new_scan_dir() / "live_scan.xml", lambda path: _store_live(path, target))
+    except RuntimeError as e:
+        raise HTTPException(409, str(e))
+    return job.to_dict()
+
+
+@router.get("/scan/live/{job_id}")
+def live_scan_status(job_id: str):
+    job = get_scan_job(job_id)
+    if not job:
+        raise HTTPException(404, "Scan not found.")
+    return job.to_dict()
+
+
+@router.post("/scan/live/{job_id}/cancel")
+def cancel_live_scan(job_id: str):
+    job = get_scan_job(job_id)
+    if not job:
+        raise HTTPException(404, "Scan not found.")
+    job.cancel()
+    return job.to_dict()
+
+
+@router.post("/scan")
+def live_scan(req: ScanRequest):
+    """Blocking live scan (kept for scripts); the UI uses /scan/live."""
+    check = _live_check(req.target, req.confirm)
+    if not check["allowed"]:
+        raise HTTPException(403, check["reason"])
+    target = check["target"]
 
     xml_path = _new_scan_dir() / "live_scan.xml"
-    scan_result = run_nmap_scan(req.target, str(xml_path))
+    scan_result = run_nmap_scan(target, str(xml_path))
     if not scan_result["success"]:
-        raise HTTPException(500, scan_result.get("error") or "Scan failed.")
+        detail = scan_result.get("error") or (scan_result.get("stderr") or "").strip()[:300]
+        raise HTTPException(500, detail or "Scan failed.")
 
     result = analyze_file(xml_path)
     if result.error:
         raise HTTPException(500, f"nmap output could not be read: {result.error}")
-    return _store(result, f"live_{req.target}", xml_path, "real")
+    return _store(result, f"live_{target}", xml_path, "real")
 
 
 def _new_batch_dir() -> Path:
@@ -269,7 +329,7 @@ async def batch_process(files: list[UploadFile], source: Source = "test"):
 
 @router.get("/network-info", response_model=NetworkInfo)
 def network_info():
-    return detect_network()
+    return {**detect_network(), "ssid": wifi_ssid()}
 
 
 @router.delete("/history", response_model=DeleteResponse)
@@ -295,11 +355,6 @@ def delete_history():
 @router.post("/scan/upload")
 async def upload_xml_alias(file: UploadFile, source: Source = "real"):
     return await upload_xml(file, source)
-
-
-@router.post("/scan/live")
-def live_scan_alias(req: ScanRequest):
-    return live_scan(req)
 
 
 @router.get("/scans/history")
@@ -453,7 +508,7 @@ def assistant_narrate_diff(old_scan_id: int, new_scan_id: int, language: str = "
     if not new:
         raise HTTPException(404, f"Scan {new_scan_id} not found.")
     diff_data = db.get_diff(old_scan_id, new_scan_id)
-    return narrate_diff(diff_data, language)
+    return narrate_diff(diff_data, language, compared_with=old["filename"])
 
 
 @router.get("/assistant/narrate-diff-latest/{scan_id}")
@@ -462,16 +517,15 @@ def assistant_narrate_diff_vs_previous(scan_id: int, language: str = "ro"):
     scan = db.get_scan(scan_id)
     if not scan:
         raise HTTPException(404, "Scan not found.")
+    # An unreadable file has nothing to compare, and is never used as the "before" either.
+    if scan["network_score"] is None:
+        raise HTTPException(404, "An unreadable file cannot be compared.")
     all_scans = db.get_all_scans(scan["source"])
-    prev = None
-    for s in all_scans:
-        if s["id"] < scan_id:
-            prev = s
-            break
+    prev = next((s for s in all_scans if s["id"] < scan_id and s["network_score"] is not None), None)
     if not prev:
         raise HTTPException(404, "No previous scan to compare against.")
     diff_data = db.get_diff(prev["id"], scan_id)
-    return narrate_diff(diff_data, language)
+    return narrate_diff(diff_data, language, compared_with=prev["filename"])
 
 
 # ── Device Naming ─────────────────────────────────────────────────────

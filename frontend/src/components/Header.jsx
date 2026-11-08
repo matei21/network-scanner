@@ -2,6 +2,7 @@ import { useRef, useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { Leaf, Languages, Eye, EyeOff, Upload, Radar } from "lucide-react";
 import AISettings from "./AISettings";
+import LiveScanDialog from "./LiveScanDialog";
 
 // Full top menu bar: logo, nav tabs, upload/scan actions, mode + lang toggles.
 // All collapses gracefully with flex-wrap on narrow screens.
@@ -128,41 +129,13 @@ export default function Header({
       </header>
 
       {confirmOpen && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="live-confirm-title"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setConfirmOpen(false);
+        <LiveScanDialog
+          onClose={() => setConfirmOpen(false)}
+          onDone={(result) => {
+            setConfirmOpen(false);
+            onLiveScan?.(result);
           }}
-        >
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl">
-            <h2 id="live-confirm-title" className="text-xl font-semibold">
-              {t("scan_confirm_title")}
-            </h2>
-            <p className="mt-2 text-gray-800">{t("scan_confirm_body")}</p>
-            <div className="mt-5 flex gap-3 justify-end">
-              <button
-                type="button"
-                onClick={() => setConfirmOpen(false)}
-                className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
-              >
-                {t("scan_confirm_no")}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmOpen(false);
-                  onLiveScan?.();
-                }}
-                className="px-4 py-2 rounded-lg bg-red-700 text-white hover:bg-red-800"
-              >
-                {t("scan_confirm_yes")}
-              </button>
-            </div>
-          </div>
-        </div>
+        />
       )}
     </>
   );

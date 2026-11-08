@@ -13,7 +13,7 @@ import MrPotato from "./components/MrPotato";
 import ScanNarrator from "./components/ScanNarrator";
 import DiffNarrator from "./components/DiffNarrator";
 import PdfDownload from "./components/PdfDownload";
-import { getLatestScan, uploadXml, runLiveScan, deleteHistory, getDeviceNames, suggestDeviceNames } from "./lib/api";
+import { getLatestScan, uploadXml, deleteHistory, getDeviceNames, suggestDeviceNames } from "./lib/api";
 import { flattenFindings, summarySentence } from "./lib/findings";
 
 function AppInner() {
@@ -63,17 +63,10 @@ function AppInner() {
     }
   }
 
-  async function onLiveScan() {
-    setBusy(true);
-    try {
-      const s = await runLiveScan({ confirm: true });
-      setScan(s);
-      setTab("overview");
-    } catch (e) {
-      setScan({ status: "error", error: String(e.message || e), devices: [], history: [] });
-    } finally {
-      setBusy(false);
-    }
+  // The scan dialog runs the scan (progress, cancel) and hands over the stored result.
+  function onLiveScan(result) {
+    setScan(result);
+    setTab("overview");
   }
 
   async function onDeleteHistory() {

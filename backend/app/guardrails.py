@@ -8,6 +8,9 @@ Rules:
      Extra entries may come from SCAN_ALLOWLIST (private, /24 or smaller only).
   4. The target must lie inside the allowlist and be at most a /24.
   5. Live scans need an explicit confirmation (--confirm / confirm=true).
+  6. The laptop must be on the team hotspot: its Wi-Fi name must start with
+     SCAN_SSID_PREFIX (default "RSH", as in RSH-<team-number>). Set it to an
+     empty value to switch this check off (e.g. the Docker-only Setup D).
 """
 
 from __future__ import annotations
@@ -84,6 +87,44 @@ def build_allowlist(detected_subnet: str | None) -> list[str]:
 
 def _refuse(code: str, reason: str) -> dict[str, Any]:
     return {"allowed": False, "code": code, "reason": reason}
+
+
+# --- team hotspot check (Wi-Fi name) -----------------------------------------
+
+_SSID_LINE = re.compile(r"^\s*SSID\s*:\s*(.+?)\s*$")   # not "BSSID": that line starts with B
+
+
+def wifi_ssid() -> str | None:
+    """Name of the Wi-Fi network this laptop is connected to, or None (cable, no Wi-Fi, unknown OS)."""
+    try:
+        if os.name == "nt":
+            out = subprocess.run(["netsh", "wlan", "show", "interfaces"],
+                                 capture_output=True, text=True, timeout=5, errors="replace").stdout
+            for line in out.splitlines():
+                m = _SSID_LINE.match(line)
+                if m:
+                    return m.group(1)
+            return None
+        out = subprocess.run(["iwgetid", "-r"], capture_output=True, text=True, timeout=5).stdout.strip()
+        return out or None
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+
+def check_ssid(ssid: str | None) -> dict[str, Any] | None:
+    """A refusal if the laptop is not on the team hotspot, else None."""
+    prefix = os.environ.get("SCAN_SSID_PREFIX", "RSH").strip()
+    if not prefix:
+        return None
+    if not ssid:
+        return _refuse("no_hotspot",
+                       f"This laptop is not on a Wi-Fi network named {prefix}... (your team hotspot). "
+                       "Connect only to the hotspot, then scan.")
+    if not ssid.upper().startswith(prefix.upper()):
+        return _refuse("wrong_wifi",
+                       f"This laptop is on the Wi-Fi '{ssid}', not on your team hotspot ({prefix}...). "
+                       "Disconnect from it, connect only to the hotspot, then scan.")
+    return None
 
 
 def validate_scan_target(target: str, allowlist: list[str] | None = None, confirmed: bool = False) -> dict[str, Any]:
