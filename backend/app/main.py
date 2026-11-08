@@ -1,10 +1,11 @@
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from . import i18n
 from .database import init_db
 from .routes import router
 
@@ -53,5 +54,15 @@ app.add_middleware(
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Content-Type"],
 )
+
+@app.middleware("http")
+async def request_language(request: Request, call_next):
+    """The UI sends its language (ro/en) in Accept-Language; every API message follows it (NFR-09)."""
+    token = i18n.set_language(request.headers.get("accept-language"))
+    try:
+        return await call_next(request)
+    finally:
+        i18n.reset_language(token)
+
 
 app.include_router(router, prefix="/api")

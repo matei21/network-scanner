@@ -181,6 +181,10 @@ header.app-menubar {
   background-color: #356A3D !important;    /* matches hill shadows */
   border-bottom: 2px solid #234B2A;
   color: #F5FAF2;
+  /* Stays at the top while the page scrolls; dialogs (z-50) still open above it. */
+  position: sticky;
+  top: 0;
+  z-index: 40;
 }
 /* Inside the dark header, invert neutral utility overrides so buttons
    and tabs stay legible on the dark background. */

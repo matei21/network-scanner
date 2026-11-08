@@ -23,6 +23,7 @@ from ai.fix_commands import get_fix_command, FIX_COMMANDS
 from . import database as db
 from . import fix_runner
 from .guardrails import build_allowlist, check_ssid, detect_network, parse_target, validate_scan_target, wifi_ssid
+from .i18n import guard_reason, t
 from .models import (
     DeleteResponse,
     DiffResult,
@@ -53,7 +54,7 @@ def _safe_xml_name(filename: str | None) -> str:
     # Path(...).name drops any directory part, so "../../x.xml" can't escape the scan folder.
     name = Path(filename or "").name
     if not name.lower().endswith(".xml") or name.startswith("."):
-        raise HTTPException(400, "Only .xml files are accepted.")
+        raise HTTPException(400, t("xml_only"))
     return name
 
 
@@ -61,7 +62,7 @@ async def _save_upload(file: UploadFile, folder: Path) -> Path:
     name = _safe_xml_name(file.filename)
     content = await file.read(MAX_FILE_BYTES + 1)
     if len(content) > MAX_FILE_BYTES:
-        raise HTTPException(413, f"{name}: file is larger than {MAX_FILE_BYTES // (1024 * 1024)} MB.")
+        raise HTTPException(413, t("file_too_large", name=name, mb=MAX_FILE_BYTES // (1024 * 1024)))
     path = folder / name
     async with aiofiles.open(path, "wb") as f:
         await f.write(content)
@@ -72,6 +73,9 @@ def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source
     data = to_dict(result)
     if result.ok:
         data = enrich_scan_data(data)
+    else:
+        # The UI explains an unreadable file in its own language; `error` keeps the parser's technical detail.
+        data["error_code"] = "unreadable"
     data["source"] = source
     scan_id = db.save_scan(display_name, result.score, str(xml_path), source)
     db.save_devices(scan_id, [
@@ -91,7 +95,23 @@ def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source
     # Everything added to `data` before this point (e.g. explanations and fix steps) is kept for re-viewing.
     db.save_snapshot(scan_id, data)
     data["history"] = _score_history(source)
+    data["changes"] = _changes_since_previous(scan_id, source, result.score)
     return data
+
+
+def _previous_readable(scan_id: int, source: str) -> dict | None:
+    """The newest earlier scan of the same kind that could be read (unreadable files are never a "before")."""
+    return next((s for s in db.get_all_scans(source) if s["id"] < scan_id and s["network_score"] is not None), None)
+
+
+def _changes_since_previous(scan_id: int, source: str, score: int | None) -> dict | None:
+    """FR-13: what changed since the previous scan (new devices, newly opened ports, ...). None if nothing to compare."""
+    if score is None:
+        return None
+    prev = _previous_readable(scan_id, source)
+    if not prev:
+        return None
+    return {**db.get_diff(prev["id"], scan_id), "compared_with": prev["filename"], "compared_scan_id": prev["id"]}
 
 
 def _local_date(timestamp: str) -> str:
@@ -137,17 +157,18 @@ def get_latest_scan():
     """Return the most recently uploaded/scanned result (what the UI loads on open)."""
     scans = db.get_all_scans(None)
     if not scans:
-        raise HTTPException(404, "No scans yet. Upload an XML file or run a live scan.")
+        raise HTTPException(404, t("no_scans"))
     # Prefer the newest readable scan, so a broken file from a batch is not what the UI opens on.
     latest = next((s for s in scans if s["network_score"] is not None), scans[0])
     data = db.get_snapshot(latest["id"])
     if data is None:
-        raise HTTPException(404, "Latest scan has no stored snapshot.")
+        raise HTTPException(404, t("no_snapshot"))
     data["scan_id"] = latest["id"]
     data["timestamp"] = latest["timestamp"]
     _refresh_weighted(data)
     data["source"] = latest["source"]
     data["history"] = _score_history(latest["source"])
+    data["changes"] = _changes_since_previous(latest["id"], latest["source"], latest["network_score"])
     return data
 
 
@@ -156,13 +177,14 @@ def get_full_scan(scan_id: int):
     """A past scan in the same format as /upload, so the UI can show it as if it was just scanned."""
     scan = db.get_scan(scan_id)
     if not scan:
-        raise HTTPException(404, "Scan not found.")
+        raise HTTPException(404, t("scan_not_found"))
     data = db.get_snapshot(scan_id)
     if data is None:
-        raise HTTPException(404, "This scan was saved before full details were stored. Upload the file again.")
+        raise HTTPException(404, t("no_snapshot"))
     data["timestamp"] = scan["timestamp"]
     data["source"] = scan["source"]
     data["history"] = _score_history(scan["source"])
+    data["changes"] = _changes_since_previous(scan_id, scan["source"], scan["network_score"])
     _refresh_weighted(data)
     return data
 
@@ -170,14 +192,14 @@ def get_full_scan(scan_id: int):
 @router.get("/findings/{scan_id}")
 def get_findings(scan_id: int):
     if not db.get_scan(scan_id):
-        raise HTTPException(404, "Scan not found.")
+        raise HTTPException(404, t("scan_not_found"))
     return db.get_findings(scan_id)
 
 
 @router.get("/devices/{scan_id}")
 def get_devices(scan_id: int):
     if not db.get_scan(scan_id):
-        raise HTTPException(404, "Scan not found.")
+        raise HTTPException(404, t("scan_not_found"))
     return db.get_devices(scan_id)
 
 
@@ -185,7 +207,7 @@ def get_devices(scan_id: int):
 def get_score(scan_id: int):
     scan = db.get_scan(scan_id)
     if not scan:
-        raise HTTPException(404, "Scan not found.")
+        raise HTTPException(404, t("scan_not_found"))
     return {"scan_id": scan_id, "score": scan["network_score"]}
 
 
@@ -201,11 +223,11 @@ def get_history(source: Literal["real", "test", "all"] = "real"):
 def get_diff(old_scan_id: int, new_scan_id: int):
     old, new = db.get_scan(old_scan_id), db.get_scan(new_scan_id)
     if not old:
-        raise HTTPException(404, f"Scan {old_scan_id} not found.")
+        raise HTTPException(404, t("scan_id_not_found", id=old_scan_id))
     if not new:
-        raise HTTPException(404, f"Scan {new_scan_id} not found.")
+        raise HTTPException(404, t("scan_id_not_found", id=new_scan_id))
     if old["source"] != new["source"]:
-        raise HTTPException(400, f"Scan {old_scan_id} is '{old['source']}' and scan {new_scan_id} is '{new['source']}': only scans of the same kind can be compared.")
+        raise HTTPException(400, t("diff_mixed_sources", old=old_scan_id, new=new_scan_id, old_source=old['source'], new_source=new['source']))
     return db.get_diff(old_scan_id, new_scan_id)
 
 
@@ -222,7 +244,15 @@ def _live_check(requested_target: str | None, confirmed: bool) -> dict:
     if check["allowed"]:
         net_ = parse_target(target)  # canonical form, the only thing nmap ever receives
         target = str(net_.network_address) if net_.prefixlen == 32 else str(net_)
-    return {**check, "target": target, "ssid": ssid, "subnet": net.get("subnet")}
+    return {**check, "reason": guard_reason(check), "target": target, "ssid": ssid, "subnet": net.get("subnet")}
+
+
+def _job_view(job) -> dict:
+    """Job state for the UI, with the error in the request's language."""
+    d = job.to_dict()
+    if d.get("error_code"):
+        d["error"] = t(d["error_code"], **d.get("error_params", {}))
+    return d
 
 
 def _store_live(xml_path: Path, target: str) -> dict:
@@ -247,26 +277,26 @@ def start_live_scan(req: ScanRequest):
     try:
         target = check["target"]
         job = start_scan_job(target, _new_scan_dir() / "live_scan.xml", lambda path: _store_live(path, target))
-    except RuntimeError as e:
-        raise HTTPException(409, str(e))
-    return job.to_dict()
+    except RuntimeError:
+        raise HTTPException(409, t("scan_running"))
+    return _job_view(job)
 
 
 @router.get("/scan/live/{job_id}")
 def live_scan_status(job_id: str):
     job = get_scan_job(job_id)
     if not job:
-        raise HTTPException(404, "Scan not found.")
-    return job.to_dict()
+        raise HTTPException(404, t("scan_not_found"))
+    return _job_view(job)
 
 
 @router.post("/scan/live/{job_id}/cancel")
 def cancel_live_scan(job_id: str):
     job = get_scan_job(job_id)
     if not job:
-        raise HTTPException(404, "Scan not found.")
+        raise HTTPException(404, t("scan_not_found"))
     job.cancel()
-    return job.to_dict()
+    return _job_view(job)
 
 
 @router.post("/scan")
@@ -281,11 +311,11 @@ def live_scan(req: ScanRequest):
     scan_result = run_nmap_scan(target, str(xml_path))
     if not scan_result["success"]:
         detail = scan_result.get("error") or (scan_result.get("stderr") or "").strip()[:300]
-        raise HTTPException(500, detail or "Scan failed.")
+        raise HTTPException(500, t("scan_failed_detail", detail=detail) if detail else t("scan_failed"))
 
     result = analyze_file(xml_path)
     if result.error:
-        raise HTTPException(500, f"nmap output could not be read: {result.error}")
+        raise HTTPException(500, t("nmap_unreadable", detail=result.error))
     return _store(result, f"live_{target}", xml_path, "real")
 
 
@@ -389,7 +419,7 @@ def _get_assistant(scan_id: int) -> Assistant:
         return _assistants[scan_id]
     data = db.get_snapshot(scan_id)
     if data is None:
-        raise HTTPException(404, "Scan not found or has no snapshot.")
+        raise HTTPException(404, t("no_snapshot"))
     # The provider choice from the settings menu decides: Groq only when selected AND a key exists.
     groq_key = _ai_settings.get("groq_api_key") if _ai_settings.get("provider") == "groq" else None
     assistant = Assistant(data, enable_cloud=False, enable_local=True, groq_api_key=groq_key)
@@ -406,7 +436,7 @@ def assistant_ask(req: AskRequest):
     if scan_id is None:
         scans = db.get_all_scans(None)
         if not scans:
-            raise HTTPException(404, "No scans available.")
+            raise HTTPException(404, t("no_scans"))
         scan_id = scans[0]["id"]
 
     assistant = _get_assistant(scan_id)
@@ -448,16 +478,16 @@ def assistant_detailed_fix(req: DetailedFixRequest):
     if scan_id is None:
         scans = db.get_all_scans(None)
         if not scans:
-            raise HTTPException(404, "No scans available.")
+            raise HTTPException(404, t("no_scans"))
         scan_id = scans[0]["id"]
 
     scan_data = db.get_snapshot(scan_id)
     if scan_data is None:
-        raise HTTPException(404, "Scan not found or has no snapshot.")
+        raise HTTPException(404, t("no_snapshot"))
 
     device = _find_device(scan_data, req.device_ip)
     if not device:
-        raise HTTPException(404, f"Device {req.device_ip} not found in scan.")
+        raise HTTPException(404, t("device_not_found", ip=req.device_ip))
     finding = next((f for f in device.get("findings", []) if f.get("code") == req.finding_code), {})
     port_info = next((p for p in device.get("open_ports", []) if p.get("port") == finding.get("port")), {})
     device_info = {
@@ -484,7 +514,7 @@ def assistant_narrate(scan_id: int, language: str = "ro"):
     """Generate a narrative summary of a scan (Scan Narrator feature)."""
     data = db.get_snapshot(scan_id)
     if data is None:
-        raise HTTPException(404, "Scan not found or has no snapshot.")
+        raise HTTPException(404, t("no_snapshot"))
     return narrate_scan(data, language)
 
 
@@ -493,10 +523,10 @@ def assistant_narrate_latest(language: str = "ro"):
     """Narrate the most recent scan."""
     scans = db.get_all_scans(None)
     if not scans:
-        raise HTTPException(404, "No scans available.")
+        raise HTTPException(404, t("no_scans"))
     data = db.get_snapshot(scans[0]["id"])
     if data is None:
-        raise HTTPException(404, "Latest scan has no snapshot.")
+        raise HTTPException(404, t("no_snapshot"))
     return narrate_scan(data, language)
 
 
@@ -507,9 +537,9 @@ def assistant_narrate_diff(old_scan_id: int, new_scan_id: int, language: str = "
     """Generate a narrative comparing two scans."""
     old, new = db.get_scan(old_scan_id), db.get_scan(new_scan_id)
     if not old:
-        raise HTTPException(404, f"Scan {old_scan_id} not found.")
+        raise HTTPException(404, t("scan_id_not_found", id=old_scan_id))
     if not new:
-        raise HTTPException(404, f"Scan {new_scan_id} not found.")
+        raise HTTPException(404, t("scan_id_not_found", id=new_scan_id))
     diff_data = db.get_diff(old_scan_id, new_scan_id)
     return narrate_diff(diff_data, language, compared_with=old["filename"])
 
@@ -519,14 +549,13 @@ def assistant_narrate_diff_vs_previous(scan_id: int, language: str = "ro"):
     """Compare a scan with the most recent previous scan of the same source."""
     scan = db.get_scan(scan_id)
     if not scan:
-        raise HTTPException(404, "Scan not found.")
+        raise HTTPException(404, t("scan_not_found"))
     # An unreadable file has nothing to compare, and is never used as the "before" either.
     if scan["network_score"] is None:
-        raise HTTPException(404, "An unreadable file cannot be compared.")
-    all_scans = db.get_all_scans(scan["source"])
-    prev = next((s for s in all_scans if s["id"] < scan_id and s["network_score"] is not None), None)
+        raise HTTPException(404, t("unreadable_not_comparable"))
+    prev = _previous_readable(scan_id, scan["source"])
     if not prev:
-        raise HTTPException(404, "No previous scan to compare against.")
+        raise HTTPException(404, t("no_previous"))
     diff_data = db.get_diff(prev["id"], scan_id)
     return narrate_diff(diff_data, language, compared_with=prev["filename"])
 
@@ -557,7 +586,7 @@ def suggest_device_names(scan_id: int, language: str = "ro"):
     """Auto-suggest friendly names for all devices in a scan."""
     data = db.get_snapshot(scan_id)
     if data is None:
-        raise HTTPException(404, "Scan not found or has no snapshot.")
+        raise HTTPException(404, t("no_snapshot"))
     suggestions = {}
     for device in data.get("devices", []):
         ip = device.get("ip", "")
@@ -573,7 +602,7 @@ def download_pdf_report(scan_id: int, language: str = "ro"):
     """Generate and download a PDF report for a scan."""
     data = db.get_snapshot(scan_id)
     if data is None:
-        raise HTTPException(404, "Scan not found or has no snapshot.")
+        raise HTTPException(404, t("no_snapshot"))
     scan = db.get_scan(scan_id)
     if scan:
         data["timestamp"] = scan["timestamp"]
@@ -591,7 +620,7 @@ def download_pdf_report_latest(language: str = "ro"):
     """Generate PDF report for the latest scan."""
     scans = db.get_all_scans(None)
     if not scans:
-        raise HTTPException(404, "No scans available.")
+        raise HTTPException(404, t("no_scans"))
     return download_pdf_report(scans[0]["id"], language)
 
 
@@ -612,7 +641,7 @@ def get_ai_settings():
 @router.put("/settings/ai")
 def update_ai_settings(req: AISettingsRequest):
     if req.provider not in ("local", "groq"):
-        raise HTTPException(400, "provider must be 'local' or 'groq'")
+        raise HTTPException(400, t("provider_invalid"))
     _ai_settings["provider"] = req.provider
     if req.groq_api_key is not None:
         _ai_settings["groq_api_key"] = req.groq_api_key
@@ -688,7 +717,7 @@ def _fix_for(req: FixRequest) -> tuple[dict, dict | None]:
 
     template = FIX_COMMANDS.get(req.finding_code)
     if not template:
-        raise HTTPException(404, f"No fix template for {req.finding_code}")
+        raise HTTPException(404, t("no_fix_template", code=req.finding_code))
 
     device = _find_device(scan_data, req.ip)
     panel_device = _gateway_device(scan_data, req.gateway) if template.get("panel_on_gateway") else device
@@ -748,10 +777,14 @@ def execute_fix(req: FixRequest):
                 "message": _MESSAGES["elevated"][lang]}
     if status == "denied":
         return {**base, "status": "denied", "message": _MESSAGES["denied"][lang]}
-    return {**base, "status": "error", "message": launched.get("message", "")}
+    message = t(launched["code"], **launched.get("params", {})) if launched.get("code") else launched.get("message", "")
+    return {**base, "status": "error", "message": message}
 
 
 @router.get("/fix/result/{run_id}")
 def fix_result(run_id: str):
     """Outcome of an elevated fix: pending until the PowerShell window finishes."""
-    return fix_runner.read_result(run_id)
+    result = fix_runner.read_result(run_id)
+    if result.get("code"):
+        result["output"] = t(result["code"])
+    return result

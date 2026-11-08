@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
-import { getReportPdfUrl } from "../lib/api";
+import { apiFetch, getReportPdfUrl, httpError } from "../lib/api";
 import { FileDown, Loader2 } from "lucide-react";
 
 export default function PdfDownload({ scanId }) {
@@ -15,11 +15,8 @@ export default function PdfDownload({ scanId }) {
     setError(null);
     try {
       const url = getReportPdfUrl(scanId, lang);
-      const res = await fetch(url);
-      if (!res.ok) {
-        const text = await res.text().catch(() => `HTTP ${res.status}`);
-        throw new Error(text.slice(0, 120));
-      }
+      const res = await apiFetch(url);
+      if (!res.ok) throw await httpError(res);
       const blob = await res.blob();
       const blobUrl = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -30,7 +27,7 @@ export default function PdfDownload({ scanId }) {
       document.body.removeChild(a);
       URL.revokeObjectURL(blobUrl);
     } catch (e) {
-      setError(e.message || "Download failed");
+      setError(e.message || (lang === "ro" ? "Descarcarea nu a reusit" : "Download failed"));
     } finally {
       setLoading(false);
     }

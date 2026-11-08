@@ -62,7 +62,7 @@ def launch_elevated(command: str, ip: str, title: str = "NetScanner fix") -> dic
         import ctypes
         shell32 = ctypes.windll.shell32
     except (ImportError, AttributeError):
-        return {"status": "error", "message": "Running fixes is only supported on Windows."}
+        return {"status": "error", "code": "fix_not_windows", "message": "Running fixes is only supported on Windows."}
 
     RUNS_DIR.mkdir(parents=True, exist_ok=True)
     run_id = uuid.uuid4().hex
@@ -82,7 +82,8 @@ def launch_elevated(command: str, ip: str, title: str = "NetScanner fix") -> dic
         return {"status": "denied"}
     if rc <= 32:
         script_path.unlink(missing_ok=True)
-        return {"status": "error", "message": f"Windows could not start PowerShell (code {rc})."}
+        return {"status": "error", "code": "fix_launch_failed", "params": {"rc": rc},
+                "message": f"Windows could not start PowerShell (code {rc})."}
     return {"status": "elevated", "run_id": run_id}
 
 
@@ -97,7 +98,8 @@ def read_result(run_id: str) -> dict:
             return {"status": "unknown"}
         # Window never finished (closed early, or UAC prompt left open): give up after 5 minutes.
         if time.time() - script.stat().st_mtime > 300:
-            return {"status": "done", "ok": False, "output": "No result: the PowerShell window was closed before finishing."}
+            return {"status": "done", "ok": False, "code": "fix_closed_early",
+                    "output": "No result: the PowerShell window was closed before finishing."}
         return {"status": "pending"}
     try:
         data = json.loads(result_path.read_text(encoding="utf-8-sig"))
