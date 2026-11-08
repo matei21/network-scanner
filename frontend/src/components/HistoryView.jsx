@@ -1,5 +1,8 @@
 import { useLanguage } from "../i18n/LanguageContext";
-import { AlertOctagon, Trash2 } from "lucide-react";
+import { useState } from "react";
+import { AlertOctagon, ChevronDown, ChevronUp, Trash2 } from "lucide-react";
+import { getDiff } from "../lib/api";
+import DiffDetails from "./DiffDetails";
 
 function Sparkline({ points }) {
   // Score trend chart — larger, white-on-green palette (user feedback).
@@ -67,6 +70,73 @@ function Sparkline({ points }) {
   );
 }
 
+function HistoryRow({ h, prev }) {
+  const { t } = useLanguage();
+  const [open, setOpen] = useState(false);
+  const [diff, setDiff] = useState(null);
+  const [error, setError] = useState("");
+  const unreadable = h.status === "error";
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && !diff) {
+      getDiff(prev.scan_id, h.scan_id)
+        .then(setDiff)
+        .catch((e) => setError(String(e.message || e)));
+    }
+  }
+
+  return (
+    <>
+      <tr>
+        <td className="p-3 font-medium break-all">{h.file}</td>
+        <td className="p-3 tabular-nums whitespace-nowrap">{h.date}</td>
+        <td className="p-3 text-right tabular-nums whitespace-nowrap">
+          {unreadable
+            ? "-"
+            : `${h.findings_count} ${h.findings_count === 1 ? t("finding_count_one") : t("findings_count")}`}
+        </td>
+        <td className="p-3 text-right font-semibold tabular-nums whitespace-nowrap">
+          {unreadable ? (
+            <span className="inline-flex items-center gap-1 text-risk-high">
+              <AlertOctagon className="w-4 h-4" aria-hidden />
+              {t("history_unreadable")}
+            </span>
+          ) : (
+            h.score
+          )}
+        </td>
+        <td className="p-3 text-right whitespace-nowrap">
+          {prev ? (
+            <button
+              type="button"
+              onClick={toggle}
+              aria-expanded={open}
+              className="inline-flex items-center gap-1 px-2 py-1 rounded-lg border border-gray-300 text-gray-800 hover:bg-gray-50"
+            >
+              {open ? <ChevronUp className="w-4 h-4" aria-hidden /> : <ChevronDown className="w-4 h-4" aria-hidden />}
+              {t("history_diff_button")}
+            </button>
+          ) : (
+            <span className="text-gray-600">{unreadable ? "" : t("history_first_scan")}</span>
+          )}
+        </td>
+      </tr>
+      {open && (
+        <tr>
+          <td colSpan={5} className="p-3 bg-gray-50">
+            <p className="mb-2 text-gray-700">
+              {t("alert_since")} <span className="font-medium break-all">{prev.file}</span> ({prev.date}):
+            </p>
+            {error ? <p className="text-risk-high">{error}</p> : diff ? <DiffDetails diff={diff} /> : <p className="text-gray-700">{t("loading")}</p>}
+          </td>
+        </tr>
+      )}
+    </>
+  );
+}
+
 export default function HistoryView({ scan, onDelete }) {
   const { t } = useLanguage();
   const history = scan?.history || [];
@@ -92,36 +162,20 @@ export default function HistoryView({ scan, onDelete }) {
                 <th scope="col" className="p-3 font-semibold">{t("history_col_date")}</th>
                 <th scope="col" className="p-3 font-semibold text-right">{t("history_col_findings")}</th>
                 <th scope="col" className="p-3 font-semibold text-right">{t("history_col_score")}</th>
+                <th scope="col" className="p-3 font-semibold text-right">{t("history_col_changes")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
               {history
-                .slice()
+                .map((h, i) => ({
+                  h,
+                  // The scan this one is compared with: the newest earlier one that could be read.
+                  prev: h.status === "error" ? null : history.slice(0, i).reverse().find((p) => p.status !== "error"),
+                }))
                 .reverse()
-                .map((h) => {
-                  const unreadable = h.status === "error";
-                  return (
-                    <tr key={h.scan_id}>
-                      <td className="p-3 font-medium break-all">{h.file}</td>
-                      <td className="p-3 tabular-nums whitespace-nowrap">{h.date}</td>
-                      <td className="p-3 text-right tabular-nums whitespace-nowrap">
-                        {unreadable
-                          ? "-"
-                          : `${h.findings_count} ${h.findings_count === 1 ? t("finding_count_one") : t("findings_count")}`}
-                      </td>
-                      <td className="p-3 text-right font-semibold tabular-nums whitespace-nowrap">
-                        {unreadable ? (
-                          <span className="inline-flex items-center gap-1 text-risk-high">
-                            <AlertOctagon className="w-4 h-4" aria-hidden />
-                            {t("history_unreadable")}
-                          </span>
-                        ) : (
-                          h.score
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                .map(({ h, prev }) => (
+                  <HistoryRow key={h.scan_id} h={h} prev={prev} />
+                ))}
             </tbody>
           </table>
         </div>

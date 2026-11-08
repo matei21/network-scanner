@@ -1,4 +1,5 @@
 import { createContext, useContext, useState, useMemo, useCallback } from "react";
+import { setApiLanguage } from "../lib/api";
 
 // UI chrome strings only. Finding explanations and fix steps come from the
 // backend (person D's templates / LLM) already translated, in two fields
@@ -87,12 +88,34 @@ const dict = {
     history_col_findings: "Probleme",
     history_col_score: "Scor",
     history_unreadable: "EROARE",
+    history_col_changes: "Schimbari",
+    history_diff_button: "Diferente",
+    history_first_scan: "primul scan",
+    diff_score: "Scor",
+    diff_resolved: "Probleme rezolvate",
+    diff_new_findings: "Probleme noi",
+    diff_devices_added: "Dispozitive noi",
+    diff_devices_removed: "Dispozitive disparute",
+    diff_ports_opened: "Porturi deschise acum",
+    diff_ports_closed: "Porturi inchise acum",
+    diff_nothing: "Nimic nu s-a schimbat fata de scanul anterior.",
+    alert_title: "Ceva nou in reteaua ta",
+    alert_since: "Fata de scanul anterior",
+    alert_device_one: "dispozitiv nou",
+    alert_devices: "dispozitive noi",
+    alert_port_one: "port nou deschis",
+    alert_ports: "porturi noi deschise",
+    alert_problem_one: "problema noua",
+    alert_problems: "probleme noi",
+    alert_show: "Vezi toate schimbarile",
+    alert_hide: "Ascunde schimbarile",
     history_delete: "Sterge istoricul meu",
     history_delete_confirm: "Esti sigur? Scanurile anterioare vor fi sterse.",
 
     error_title: "Nu am putut citi fisierul",
     error_broken:
       "Fisierul pare deteriorat sau nu este un XML nmap. Instrumentul nu s-a oprit.",
+    error_technical: "Detaliu tehnic",
     loading: "Se incarca...",
     chat_placeholder: "Intreaba-ma: care este cel mai periculos?",
     chat_send: "Trimite",
@@ -188,12 +211,34 @@ const dict = {
     history_col_findings: "Problems",
     history_col_score: "Score",
     history_unreadable: "ERROR",
+    history_col_changes: "Changes",
+    history_diff_button: "Differences",
+    history_first_scan: "first scan",
+    diff_score: "Score",
+    diff_resolved: "Resolved problems",
+    diff_new_findings: "New problems",
+    diff_devices_added: "New devices",
+    diff_devices_removed: "Devices gone",
+    diff_ports_opened: "Ports now open",
+    diff_ports_closed: "Ports now closed",
+    diff_nothing: "Nothing changed since the previous scan.",
+    alert_title: "Something new on your network",
+    alert_since: "Since the previous scan",
+    alert_device_one: "new device",
+    alert_devices: "new devices",
+    alert_port_one: "newly opened port",
+    alert_ports: "newly opened ports",
+    alert_problem_one: "new problem",
+    alert_problems: "new problems",
+    alert_show: "Show all changes",
+    alert_hide: "Hide changes",
     history_delete: "Delete my history",
     history_delete_confirm: "Are you sure? Previous scans will be deleted.",
 
     error_title: "Could not read the file",
     error_broken:
       "The file looks damaged or is not an nmap XML. The tool did not crash.",
+    error_technical: "Technical detail",
     loading: "Loading...",
     chat_placeholder: "Ask me: what is the most dangerous?",
     chat_send: "Send",
@@ -218,6 +263,8 @@ export function LanguageProvider({ children }) {
       return "ro";
     }
   });
+  // Set during render (not in an effect) so even the very first API call is answered in this language.
+  setApiLanguage(lang);
 
   const toggle = useCallback(() => {
     setLang((prev) => {

@@ -9,6 +9,7 @@ import NetworkMap from "./components/NetworkMap";
 import MapLegend from "./components/MapLegend";
 import HistoryView from "./components/HistoryView";
 import ErrorBanner from "./components/ErrorBanner";
+import ChangeAlert from "./components/ChangeAlert";
 import MrPotato from "./components/MrPotato";
 import ScanNarrator from "./components/ScanNarrator";
 import DiffNarrator from "./components/DiffNarrator";
@@ -102,10 +103,11 @@ function AppInner() {
         busy={busy}
       />
       <main className="max-w-6xl w-full mx-auto px-4 py-5 flex-1 space-y-5">
-        <ErrorBanner scan={scan} />
+        <ErrorBanner scan={scan} expert={expert} />
 
         {tab === "overview" && (
           <div className="space-y-5">
+            <ChangeAlert changes={scan?.changes} />
             <ScoreSemaphore score={scan?.score} scan={scan} loading={loading} />
             {scan && scan.status !== "error" && scan.scan_id && (
               <ScanNarrator scanId={scan.scan_id} />

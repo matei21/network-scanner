@@ -85,8 +85,9 @@ def build_allowlist(detected_subnet: str | None) -> list[str]:
 
 # --- validation -------------------------------------------------------------
 
-def _refuse(code: str, reason: str) -> dict[str, Any]:
-    return {"allowed": False, "code": code, "reason": reason}
+def _refuse(code: str, reason: str, **params: Any) -> dict[str, Any]:
+    """reason is English (the CLI shows it); code + params let the API answer in Romanian too (i18n.guard_reason)."""
+    return {"allowed": False, "code": code, "reason": reason, "params": params}
 
 
 # --- team hotspot check (Wi-Fi name) -----------------------------------------
@@ -119,11 +120,11 @@ def check_ssid(ssid: str | None) -> dict[str, Any] | None:
     if not ssid:
         return _refuse("no_hotspot",
                        f"This laptop is not on a Wi-Fi network named {prefix}... (your team hotspot). "
-                       "Connect only to the hotspot, then scan.")
+                       "Connect only to the hotspot, then scan.", prefix=prefix)
     if not ssid.upper().startswith(prefix.upper()):
         return _refuse("wrong_wifi",
                        f"This laptop is on the Wi-Fi '{ssid}', not on your team hotspot ({prefix}...). "
-                       "Disconnect from it, connect only to the hotspot, then scan.")
+                       "Disconnect from it, connect only to the hotspot, then scan.", ssid=ssid, prefix=prefix)
     return None
 
 
@@ -131,14 +132,16 @@ def validate_scan_target(target: str, allowlist: list[str] | None = None, confir
     """Decide whether a live scan of `target` may run. Never raises."""
     net = parse_target(target)
     if net is None:
+        shown_target = (target or '')[:MAX_TARGET_LENGTH]
         return _refuse("invalid_target",
-                       f"'{(target or '')[:MAX_TARGET_LENGTH]}' is not a valid target. "
-                       "Use an IPv4 address or subnet, e.g. 10.74.130.0/24.")
+                       f"'{shown_target}' is not a valid target. "
+                       "Use an IPv4 address or subnet, e.g. 10.74.130.0/24.", target=shown_target)
 
     shown = str(net.network_address) if net.prefixlen == 32 else str(net)   # "8.8.8.8", not "8.8.8.8/32"
 
     if not net.is_private:
-        return _refuse("public_ip", f"{shown} is a public IP address. Only your own private network may be scanned.")
+        return _refuse("public_ip", f"{shown} is a public IP address. Only your own private network may be scanned.",
+                       shown=shown)
 
     allowed_nets = [n for n in (parse_target(a) for a in (allowlist or [])) if n is not None]
     if not allowed_nets:
@@ -147,16 +150,19 @@ def validate_scan_target(target: str, allowlist: list[str] | None = None, confir
                        "Connect to your hotspot and try again.")
 
     if net.prefixlen < MAX_PREFIX:
-        return _refuse("too_large", f"{net} is too large. Scan at most a /{MAX_PREFIX} (256 addresses).")
+        return _refuse("too_large", f"{net} is too large. Scan at most a /{MAX_PREFIX} (256 addresses).",
+                       net=str(net), max_prefix=MAX_PREFIX)
 
     if not any(net.subnet_of(a) for a in allowed_nets):
-        return _refuse("outside_allowlist",
-                       f"{shown} is outside your network. Allowed: {', '.join(str(a) for a in allowed_nets)}.")
+        allowed = ", ".join(str(a) for a in allowed_nets)
+        return _refuse("outside_allowlist", f"{shown} is outside your network. Allowed: {allowed}.",
+                       shown=shown, allowed=allowed)
 
     if not confirmed:
         return _refuse("not_confirmed", "Live scans need confirmation: add --confirm (or confirm=true).")
 
-    return {"allowed": True, "code": "ok", "reason": f"{shown} is inside your network and confirmed."}
+    return {"allowed": True, "code": "ok", "reason": f"{shown} is inside your network and confirmed.",
+            "params": {"shown": shown}}
 
 
 # --- network detection (FR-01) ----------------------------------------------

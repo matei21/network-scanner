@@ -10,8 +10,18 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "0";
 // Simulate a small delay so loading states are visible in mock mode.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// The backend answers every message (errors, guardrail refusals) in the UI's language (NFR-09).
+let apiLanguage = "ro";
+export function setApiLanguage(lang) {
+  apiLanguage = lang === "en" ? "en" : "ro";
+}
+
+export function apiFetch(url, options = {}) {
+  return fetch(url, { ...options, headers: { ...options.headers, "Accept-Language": apiLanguage } });
+}
+
 // FastAPI puts the reason in {"detail": ...} (e.g. why the guardrail refused a scan); show it, not just the code.
-async function httpError(r) {
+export async function httpError(r) {
   let message = `HTTP ${r.status}`;
   try {
     const body = await r.json();
@@ -29,7 +39,7 @@ export async function getLatestScan() {
     await sleep(250);
     return mockScan;
   }
-  const r = await fetch("/api/scan/latest");
+  const r = await apiFetch("/api/scan/latest");
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -41,7 +51,7 @@ export async function getScan(id) {
     if (id === "demo-broken") return mockBroken;
     return mockScan;
   }
-  const r = await fetch(`/api/scan/${encodeURIComponent(id)}`);
+  const r = await apiFetch(`/api/scan/${encodeURIComponent(id)}`);
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -55,7 +65,7 @@ export async function uploadXml(file) {
   }
   const fd = new FormData();
   fd.append("file", file);
-  const r = await fetch("/api/scan/upload", { method: "POST", body: fd });
+  const r = await apiFetch("/api/scan/upload", { method: "POST", body: fd });
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -68,7 +78,7 @@ export async function getLiveScanPreview() {
     await sleep(200);
     return { allowed: true, target: "192.168.1.0/24", ssid: "RSH-demo", subnet: "192.168.1.0/24", reason: "" };
   }
-  const r = await fetch("/api/scan/live/preview");
+  const r = await apiFetch("/api/scan/live/preview");
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -78,7 +88,7 @@ export async function startLiveScan() {
     mockPolls = 0;
     return { job_id: "mock", status: "running", phase: "discovery", percent: 0 };
   }
-  const r = await fetch("/api/scan/live", {
+  const r = await apiFetch("/api/scan/live", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ confirm: true }),
@@ -95,14 +105,14 @@ export async function getLiveScan(jobId) {
       ? { job_id: jobId, status: "running", phase: "tcp", percent, remaining: "0:00:10" }
       : { job_id: jobId, status: "done", percent: 100, result: mockScan };
   }
-  const r = await fetch(`/api/scan/live/${encodeURIComponent(jobId)}`);
+  const r = await apiFetch(`/api/scan/live/${encodeURIComponent(jobId)}`);
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
 export async function cancelLiveScan(jobId) {
   if (USE_MOCK) return { job_id: jobId, status: "cancelled" };
-  const r = await fetch(`/api/scan/live/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  const r = await apiFetch(`/api/scan/live/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -112,7 +122,24 @@ export async function getHistory() {
     await sleep(150);
     return mockScan.history;
   }
-  const r = await fetch("/api/scans/history");
+  const r = await apiFetch("/api/scans/history");
+  if (!r.ok) throw await httpError(r);
+  return r.json();
+}
+
+// FR-10: everything that changed between two scans (devices, ports, findings, score).
+export async function getDiff(oldScanId, newScanId) {
+  if (USE_MOCK) {
+    await sleep(150);
+    return {
+      old_scan_id: oldScanId, new_scan_id: newScanId, old_score: 60, new_score: 100,
+      resolved_findings: [{ ip: "192.168.1.30", port: 23, finding_code: "TELNET_OPEN" }],
+      new_findings: [], devices_added: [], devices_removed: [],
+      ports_opened: [{ ip: "192.168.1.1", port: 443, protocol: "tcp", service: "https" }],
+      ports_closed: [{ ip: "192.168.1.30", port: 23, protocol: "tcp", service: "telnet" }],
+    };
+  }
+  const r = await apiFetch(`/api/diff/${encodeURIComponent(oldScanId)}/${encodeURIComponent(newScanId)}`);
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -122,7 +149,7 @@ export async function deleteHistory() {
     await sleep(100);
     return { ok: true };
   }
-  const r = await fetch("/api/scans/history", { method: "DELETE" });
+  const r = await apiFetch("/api/scans/history", { method: "DELETE" });
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -138,7 +165,7 @@ export async function askAssistant(question, scanId, language, expert = false) {
       cites: [{ ip: "192.168.1.40", port: 554, code: "CAMERA_STREAM_EXPOSED" }],
     };
   }
-  const r = await fetch("/api/assistant/ask", {
+  const r = await apiFetch("/api/assistant/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, scan_id: scanId, language, expert }),
@@ -158,7 +185,7 @@ export async function getDetailedFix(findingCode, deviceIp, scanId, language = "
       template_steps: ["Deschide setarile camerei", "Activeaza Authentication"],
     };
   }
-  const r = await fetch("/api/assistant/detailed-fix", {
+  const r = await apiFetch("/api/assistant/detailed-fix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ finding_code: findingCode, device_ip: deviceIp, scan_id: scanId, language, expert }),
@@ -175,7 +202,7 @@ export async function getDeviceNames() {
       "192.168.1.40": { custom_name: "Camera din sufragerie", suggested_name: "Camera IP Hikvision" },
     };
   }
-  const r = await fetch("/api/device-names");
+  const r = await apiFetch("/api/device-names");
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -185,7 +212,7 @@ export async function saveDeviceName(ip, customName, suggestedName) {
     await sleep(100);
     return { ok: true };
   }
-  const r = await fetch("/api/device-names", {
+  const r = await apiFetch("/api/device-names", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ip, custom_name: customName, suggested_name: suggestedName }),
@@ -204,7 +231,7 @@ export async function suggestDeviceNames(scanId, language = "ro") {
       "192.168.1.50": "Dispozitiv necunoscut",
     };
   }
-  const r = await fetch(`/api/device-names/suggest/${encodeURIComponent(scanId)}?language=${language}`);
+  const r = await apiFetch(`/api/device-names/suggest/${encodeURIComponent(scanId)}?language=${language}`);
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -221,7 +248,7 @@ export async function narrateDiff(oldScanId, newScanId, language = "ro") {
       devices_added_count: 1, devices_removed_count: 0,
     };
   }
-  const r = await fetch(`/api/assistant/narrate-diff/${encodeURIComponent(oldScanId)}/${encodeURIComponent(newScanId)}?language=${language}`);
+  const r = await apiFetch(`/api/assistant/narrate-diff/${encodeURIComponent(oldScanId)}/${encodeURIComponent(newScanId)}?language=${language}`);
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -238,7 +265,7 @@ export async function narrateDiffVsPrevious(scanId, language = "ro") {
       devices_added_count: 0, devices_removed_count: 0,
     };
   }
-  const r = await fetch(`/api/assistant/narrate-diff-latest/${encodeURIComponent(scanId)}?language=${language}`);
+  const r = await apiFetch(`/api/assistant/narrate-diff-latest/${encodeURIComponent(scanId)}?language=${language}`);
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -253,7 +280,7 @@ export async function getAISettings() {
     await sleep(100);
     return { provider: "local", has_groq_key: false };
   }
-  const r = await fetch("/api/settings/ai");
+  const r = await apiFetch("/api/settings/ai");
   if (!r.ok) throw await httpError(r);
   return r.json();
 }
@@ -265,7 +292,7 @@ export async function updateAISettings(provider, groqApiKey) {
   }
   const body = { provider };
   if (groqApiKey !== undefined) body.groq_api_key = groqApiKey;
-  const r = await fetch("/api/settings/ai", {
+  const r = await apiFetch("/api/settings/ai", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
@@ -283,7 +310,7 @@ export async function getFixInfo(findingCode, ip, port, language = "ro", scanId)
     };
     return mockCommands[findingCode] || { fix_type: "powershell", command: `New-NetFirewallRule -DisplayName 'Block port ${port}' -Direction Inbound -Action Block -Protocol TCP -LocalPort ${port}`, explanation: `Blocks port ${port}`, requires_admin: true };
   }
-  const r = await fetch("/api/fix/info", {
+  const r = await apiFetch("/api/fix/info", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ finding_code: findingCode, ip, port, language, scan_id: scanId }),
@@ -297,7 +324,7 @@ export async function executeFix(findingCode, ip, port, language = "ro", scanId)
     await sleep(1000);
     return { status: "remote", executed: false, message: "Mock mode: nothing runs." };
   }
-  const r = await fetch("/api/fix/execute", {
+  const r = await apiFetch("/api/fix/execute", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ finding_code: findingCode, ip, port, language, scan_id: scanId }),
@@ -307,7 +334,7 @@ export async function executeFix(findingCode, ip, port, language = "ro", scanId)
 }
 
 export async function getFixResult(runId) {
-  const r = await fetch(`/api/fix/result/${encodeURIComponent(runId)}`);
+  const r = await apiFetch(`/api/fix/result/${encodeURIComponent(runId)}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
@@ -328,7 +355,7 @@ export async function narrateScan(scanId, language = "ro") {
   const url = scanId
     ? `/api/assistant/narrate/${encodeURIComponent(scanId)}?language=${language}`
     : `/api/assistant/narrate?language=${language}`;
-  const r = await fetch(url);
+  const r = await apiFetch(url);
   if (!r.ok) throw await httpError(r);
   return r.json();
 }

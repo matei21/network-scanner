@@ -98,7 +98,9 @@ class ScanJob:
         self.phase = "discovery"
         self.phase_percent = 0.0
         self.remaining = None            # "0:01:02", as nmap prints it
-        self.error = None
+        self.error = None                # English detail (logs, CLI)
+        self.error_code = None           # nmap_missing | scan_timeout | scan_failed_detail | nmap_unreadable
+        self.error_params = {}           # values for the translated message (i18n)
         self.result = None
         self.started = time.monotonic()
         self._proc = None
@@ -113,7 +115,7 @@ class ScanJob:
                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace",
             )
         except FileNotFoundError:
-            self.status, self.error = "error", NMAP_NOT_FOUND
+            self._fail("nmap_missing", NMAP_NOT_FOUND)
             return
         threading.Thread(target=self._run, daemon=True).start()
         timer = threading.Timer(self.timeout, self._stop_process, args=("timeout",))
@@ -135,15 +137,19 @@ class ScanJob:
         if self._stop == "cancel":
             self.status = "cancelled"
         elif self._stop == "timeout":
-            self.status, self.error = "error", f"Scan timed out after {self.timeout}s"
+            self._fail("scan_timeout", f"Scan timed out after {self.timeout}s", seconds=self.timeout)
         elif code != 0:
-            self.status, self.error = "error", " ".join(tail)[-300:] or "Scan failed."
+            detail = " ".join(tail)[-300:] or "nmap stopped with an error"
+            self._fail("scan_failed_detail", detail, detail=detail)
         else:
             try:
                 self.result = self.on_finish(self.output)
                 self.status = "done"
             except Exception as e:  # the scan finished but its file could not be stored
-                self.status, self.error = "error", str(e)
+                self._fail("nmap_unreadable", str(e), detail=str(e))
+
+    def _fail(self, code: str, detail: str, **params) -> None:
+        self.status, self.error, self.error_code, self.error_params = "error", detail, code, params
 
     def _stop_process(self, reason: str) -> None:
         if self.status != "running" or self._proc is None or self._proc.poll() is not None:
@@ -173,6 +179,8 @@ class ScanJob:
                 "remaining": self.remaining,
                 "elapsed": int(time.monotonic() - self.started),
                 "error": self.error,
+                "error_code": self.error_code,
+                "error_params": self.error_params,
                 "result": self.result,
             }
 
