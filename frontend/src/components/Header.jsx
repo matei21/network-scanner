@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
-import { Leaf, Languages, Eye, EyeOff, Upload, Radar } from "lucide-react";
+import { Languages, Eye, EyeOff, Upload, Radar } from "lucide-react";
 import AISettings from "./AISettings";
 import LiveScanDialog from "./LiveScanDialog";
 
@@ -25,10 +25,9 @@ export default function Header({
       <header className="app-menubar">
         <div className="max-w-full mx-auto px-4 py-2.5 flex items-center gap-3 flex-nowrap">
           <div className="flex items-center gap-2 min-w-0">
-            <Leaf className="w-6 h-6 text-blue-700" aria-hidden />
-            <span className="font-bold text-lg leading-tight whitespace-nowrap">
-              {t("app_title")}
-            </span>
+            {/* netGARDEN logo: green GARDEN in simple mode, blue GARDEN in expert mode */}
+            <img src="/logo-netgarden-green.png" alt="netGARDEN" className="app-logo logo-simple" />
+            <img src="/logo-netgarden-blue.png" alt="netGARDEN" className="app-logo logo-expert" />
           </div>
 
           <nav

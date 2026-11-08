@@ -789,6 +789,16 @@ footer {
   color: #F2F8FF !important;
 }
 
+/* netGARDEN logo in the top bar: one image per mode. */
+.app-logo {
+  height: 2.25rem;
+  width: auto;
+  display: block;
+}
+.logo-expert { display: none; }
+[data-mode="expert"] .logo-simple { display: none; }
+[data-mode="expert"] .logo-expert { display: block; }
+
 /* Score trend points: pointer on hover, no browser focus box (the point grows instead). */
 .chart-point { cursor: pointer; outline: none; }
 
