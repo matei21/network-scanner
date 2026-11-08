@@ -13,7 +13,6 @@ import MrPotato from "./components/MrPotato";
 import ScanNarrator from "./components/ScanNarrator";
 import DiffNarrator from "./components/DiffNarrator";
 import PdfDownload from "./components/PdfDownload";
-import AISettings from "./components/AISettings";
 import { getLatestScan, uploadXml, deleteHistory, getDeviceNames, suggestDeviceNames } from "./lib/api";
 import { flattenFindings, summarySentence } from "./lib/findings";
 
@@ -90,8 +89,8 @@ function AppInner() {
   ];
 
   return (
-    <div className="min-h-full flex flex-col relative" lang={lang}>
-      <VideoBackground />
+    <div className="min-h-full flex flex-col relative" lang={lang} data-mode={expert ? "expert" : "simple"}>
+      <VideoBackground expert={expert} />
       <Header
         expert={expert}
         onToggleExpert={() => setExpert((v) => !v)}
@@ -140,20 +139,16 @@ function AppInner() {
             <HistoryView scan={scan} onDelete={onDeleteHistory} />
           </>
         )}
-        {/* Bottom section: PDF download + AI settings */}
         {scan && scan.status !== "error" && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-            <div className="flex items-center">
-              <PdfDownload scanId={scan.scan_id} />
-            </div>
-            <AISettings />
+          <div className="mt-4">
+            <PdfDownload scanId={scan.scan_id} />
           </div>
         )}
       </main>
       <footer className="text-center text-xs py-4">
         R Systems Hackathon 2026 · Secure Networks, Simply Explained
       </footer>
-      <MrPotato scanId={scan?.scan_id} />
+      <MrPotato scanId={scan?.scan_id} expert={expert} />
     </div>
   );
 }

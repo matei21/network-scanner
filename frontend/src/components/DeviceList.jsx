@@ -32,7 +32,7 @@ function DeviceCard({ device, expert, deviceNames, onNameSaved, suggestedNames }
   return (
     <div className="bg-white rounded-xl border border-gray-200 p-4 flex gap-4 items-start">
       <div
-        className="w-24 h-24 shrink-0 rounded-full bg-white border-2 flex items-center justify-center overflow-hidden"
+        className="icon-bubble w-24 h-24 shrink-0 rounded-full border-2 flex items-center justify-center overflow-hidden"
         style={{ borderColor: "var(--border)" }}
         aria-hidden
       >

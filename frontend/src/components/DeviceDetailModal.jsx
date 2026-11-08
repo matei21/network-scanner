@@ -49,19 +49,19 @@ export default function DeviceDetailModal({ device, onClose }) {
               className="w-20 h-20 shrink-0 rounded-full border-2 flex items-center justify-center overflow-hidden"
               style={{
                 borderColor: {
-                  at_risk: "#B91C1C",
-                  watch: "#B45309",
-                  attention: "#1D4ED8",
-                  info: "#6B7280",
-                  safe: "#2E7D32",
+                  at_risk: "var(--node-ring-high)",
+                  watch: "var(--node-ring-medium)",
+                  attention: "var(--node-ring-low)",
+                  info: "var(--node-ring-info)",
+                  safe: "var(--node-ring-safe)",
                 }[verdict] || "var(--border)",
                 backgroundColor: {
-                  at_risk: "rgba(248, 201, 201, 0.85)",
-                  watch: "rgba(255, 224, 163, 0.85)",
-                  attention: "rgba(191, 219, 254, 0.85)",
-                  info: "rgba(229, 231, 235, 0.85)",
-                  safe: "rgba(200, 230, 201, 0.85)",
-                }[verdict] || "rgba(255, 255, 255, 0.95)",
+                  at_risk: "var(--node-bg-high)",
+                  watch: "var(--node-bg-medium)",
+                  attention: "var(--node-bg-low)",
+                  info: "var(--node-bg-info)",
+                  safe: "var(--node-bg-safe)",
+                }[verdict] || "var(--bg-card)",
               }}
             >
               <DeviceIcon type={device.type} size={76} />
@@ -156,7 +156,7 @@ export default function DeviceDetailModal({ device, onClose }) {
                         {t("finding_port")} {f.port}
                       </span>
                     </div>
-                    <p className="mt-2 text-base">{explanation}</p>
+                    <p className="mt-2 text-base finding-text">{explanation}</p>
                     {steps.length > 0 && (
                       <>
                         <button
@@ -178,7 +178,7 @@ export default function DeviceDetailModal({ device, onClose }) {
                           )}
                         </button>
                         {open && (
-                          <ol className="mt-2 list-decimal pl-6 space-y-1 text-sm bg-white/50 rounded p-2">
+                          <ol className="finding-steps mt-2 list-decimal pl-6 space-y-1 text-sm bg-white/50 rounded p-2">
                             {steps.map((s, j) => (
                               <li key={j}>{s}</li>
                             ))}

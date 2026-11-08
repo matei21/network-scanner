@@ -3,11 +3,11 @@ import { deviceTypeLabel } from "../lib/findings";
 import DeviceIcon from "./DeviceIcon";
 
 const SEVERITY_LEGEND = [
-  { key: "high",   bg: "rgba(248, 201, 201, 0.85)", ring: "#B91C1C" },
-  { key: "medium", bg: "rgba(255, 224, 163, 0.85)", ring: "#B45309" },
-  { key: "low",    bg: "rgba(191, 219, 254, 0.85)", ring: "#1D4ED8" },
-  { key: "info",   bg: "rgba(229, 231, 235, 0.85)", ring: "#6B7280" },
-  { key: "safe",   bg: "rgba(200, 230, 201, 0.85)", ring: "#2E7D32" },
+  { key: "high",   bg: "var(--node-bg-high)",   ring: "var(--node-ring-high)" },
+  { key: "medium", bg: "var(--node-bg-medium)", ring: "var(--node-ring-medium)" },
+  { key: "low",    bg: "var(--node-bg-low)",    ring: "var(--node-ring-low)" },
+  { key: "info",   bg: "var(--node-bg-info)",   ring: "var(--node-ring-info)" },
+  { key: "safe",   bg: "var(--node-bg-safe)",   ring: "var(--node-ring-safe)" },
 ];
 
 export default function MapLegend({ devices }) {
@@ -18,22 +18,14 @@ export default function MapLegend({ devices }) {
   );
 
   return (
-    <div
-      className="rounded-2xl p-5 border"
-      style={{
-        background: "rgba(255, 255, 255, 0.75)",
-        borderColor: "var(--border)",
-        backdropFilter: "blur(6px)",
-        WebkitBackdropFilter: "blur(6px)",
-      }}
-    >
+    <div className="map-legend rounded-2xl p-5 border">
       <h3 className="font-bold text-lg mb-4">
         {lang === "ro" ? "Legenda" : "Legend"}
       </h3>
 
       {/* ROW 1 — severity: big dots with label underneath, horizontal */}
       <div className="mb-5">
-        <div className="text-sm font-semibold mb-3" style={{ color: "var(--text-muted)" }}>
+        <div className="legend-label text-sm font-semibold mb-3">
           {lang === "ro" ? "Culori — gravitate" : "Colours — severity"}
         </div>
         <div className="flex flex-wrap gap-4 justify-start">
@@ -44,7 +36,7 @@ export default function MapLegend({ devices }) {
                 style={{ background: s.bg, borderColor: s.ring }}
                 aria-hidden
               />
-              <span className="text-sm font-semibold text-center">
+              <span className="legend-text text-sm font-semibold text-center">
                 {s.key === "safe"
                   ? (lang === "ro" ? "Fara probleme" : "No problems")
                   : t(`severity_${s.key}`)}
@@ -56,19 +48,19 @@ export default function MapLegend({ devices }) {
 
       {/* ROW 2 — icons: big icons in a 3-column grid with label underneath */}
       <div>
-        <div className="text-sm font-semibold mb-3" style={{ color: "var(--text-muted)" }}>
+        <div className="legend-label text-sm font-semibold mb-3">
           {lang === "ro" ? "Iconite — tip dispozitiv" : "Icons — device type"}
         </div>
                 <div className="flex flex-wrap gap-4 justify-start">
           {types.map((type) => (
             <div key={type} className="flex flex-col items-center gap-2">
               <span
-                className="inline-flex w-16 h-16 shrink-0 items-center justify-center rounded-full bg-white border-2"
+                className="icon-bubble inline-flex w-16 h-16 shrink-0 items-center justify-center rounded-full border-2"
                 style={{ borderColor: "var(--border)" }}
               >
                 <DeviceIcon type={type} size={56} />
               </span>
-              <span className="text-sm text-center">
+              <span className="legend-text text-sm text-center">
                 {deviceTypeLabel(type, lang)}
               </span>
             </div>

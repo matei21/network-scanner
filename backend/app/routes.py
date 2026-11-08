@@ -15,12 +15,13 @@ from analyzer.models import ScanResult
 from analyzer.parser import MAX_FILE_BYTES
 from analyzer.service import analyze_file, analyze_folder, to_dict
 
-from ai.assistant import Assistant, enrich_scan_data, narrate_scan, suggest_followups, narrate_diff
+from ai.assistant import Assistant, custom_risk_score, enrich_scan_data, narrate_scan, suggest_followups, narrate_diff
 from ai.fingerprint import guess_device_type, suggest_device_name
 from ai.pdf_report import generate_report
 from ai.fix_commands import get_fix_command, FIX_COMMANDS
 
 from . import database as db
+from . import fix_runner
 from .guardrails import build_allowlist, check_ssid, detect_network, parse_target, validate_scan_target, wifi_ssid
 from .models import (
     DeleteResponse,
@@ -125,6 +126,12 @@ async def upload_xml(file: UploadFile, source: Source = "real"):
     return _store(result, result.file, xml_path, source)
 
 
+def _refresh_weighted(data: dict) -> None:
+    """Snapshots saved before the current weighted-score formula get it recomputed on read."""
+    if data.get("devices") and data.get("score") is not None:
+        data["custom_risk_score"] = custom_risk_score(data)
+
+
 @router.get("/scan/latest")
 def get_latest_scan():
     """Return the most recently uploaded/scanned result (what the UI loads on open)."""
@@ -138,6 +145,7 @@ def get_latest_scan():
         raise HTTPException(404, "Latest scan has no stored snapshot.")
     data["scan_id"] = latest["id"]
     data["timestamp"] = latest["timestamp"]
+    _refresh_weighted(data)
     data["source"] = latest["source"]
     data["history"] = _score_history(latest["source"])
     return data
@@ -155,6 +163,7 @@ def get_full_scan(scan_id: int):
     data["timestamp"] = scan["timestamp"]
     data["source"] = scan["source"]
     data["history"] = _score_history(scan["source"])
+    _refresh_weighted(data)
     return data
 
 
@@ -359,6 +368,7 @@ class AskRequest(BaseModel):
     question: str
     scan_id: int | None = None
     language: str = "ro"
+    expert: bool = False
 
 
 class DetailedFixRequest(BaseModel):
@@ -366,6 +376,7 @@ class DetailedFixRequest(BaseModel):
     device_ip: str
     scan_id: int | None = None
     language: str = "ro"
+    expert: bool = False
 
 
 # Keep one Assistant per scan to preserve conversation history within a session.
@@ -378,7 +389,9 @@ def _get_assistant(scan_id: int) -> Assistant:
     data = db.get_snapshot(scan_id)
     if data is None:
         raise HTTPException(404, "Scan not found or has no snapshot.")
-    assistant = Assistant(data, enable_cloud=False, enable_local=True, groq_api_key=_ai_settings.get("groq_api_key"))
+    # The provider choice from the settings menu decides: Groq only when selected AND a key exists.
+    groq_key = _ai_settings.get("groq_api_key") if _ai_settings.get("provider") == "groq" else None
+    assistant = Assistant(data, enable_cloud=False, enable_local=True, groq_api_key=groq_key)
     _assistants[scan_id] = assistant
     if len(_assistants) > 20:
         oldest = next(iter(_assistants))
@@ -396,30 +409,31 @@ def assistant_ask(req: AskRequest):
         scan_id = scans[0]["id"]
 
     assistant = _get_assistant(scan_id)
-    result = assistant.ask(req.question, req.language)
+    result = assistant.ask(req.question, req.language, req.expert)
+    scan_related = result.get("scan_related", True)
 
     # Extract cited findings from the scan data for grounding display (NFR-06)
     cites = []
     scan_data = db.get_snapshot(scan_id) or {}
-    for device in scan_data.get("devices", []):
-        for finding in device.get("findings", []):
-            code = finding.get("code", "")
-            if code and code.lower() in result["text"].lower():
-                cites.append({
-                    "ip": finding.get("ip", device.get("ip")),
-                    "port": finding.get("port"),
-                    "code": code,
-                })
+    if scan_related:
+        referenced = result.get("finding_code")
+        for device in scan_data.get("devices", []):
+            for finding in device.get("findings", []):
+                code = finding.get("code", "")
+                if code and (code == referenced or code.lower() in result["text"].lower()):
+                    cites.append({"ip": device.get("ip"), "port": finding.get("port"), "code": code})
 
     detected_lang = result.get("detected_language", req.language)
-    followups = suggest_followups(scan_data, result["text"], detected_lang)
+    followups = suggest_followups(scan_data, result["text"] + " " + (result.get("finding_code") or ""), detected_lang) if scan_related else []
 
     return {
         "answer": result["text"],
         "source": result["source"],
         "agent": result.get("agent", "monolithic"),
+        "agents": result.get("agents", []),
+        "scan_related": scan_related,
         "detected_language": detected_lang,
-        "cites": cites,
+        "cites": cites[:4],
         "followups": followups,
     }
 
@@ -438,28 +452,25 @@ def assistant_detailed_fix(req: DetailedFixRequest):
     if scan_data is None:
         raise HTTPException(404, "Scan not found or has no snapshot.")
 
-    device_info = {}
-    for device in scan_data.get("devices", []):
-        if device.get("ip") == req.device_ip:
-            device_info = {"ip": device.get("ip"), "vendor": device.get("vendor", ""), "hostname": device.get("hostname", ""), "type": device.get("type", "")}
-            for finding in device.get("findings", []):
-                if finding.get("code") == req.finding_code:
-                    device_info["port"] = finding.get("port", "")
-                    device_info["service"] = finding.get("service", "")
-                    device_info["product"] = finding.get("product", "")
-                    break
-            break
-
-    if not device_info:
+    device = _find_device(scan_data, req.device_ip)
+    if not device:
         raise HTTPException(404, f"Device {req.device_ip} not found in scan.")
+    finding = next((f for f in device.get("findings", []) if f.get("code") == req.finding_code), {})
+    port_info = next((p for p in device.get("open_ports", []) if p.get("port") == finding.get("port")), {})
+    device_info = {
+        "ip": device.get("ip"), "vendor": device.get("vendor", ""), "hostname": device.get("hostname", ""),
+        "type": device.get("type", ""), "port": finding.get("port", ""),
+        "service": port_info.get("service", ""), "product": port_info.get("product", ""),
+    }
 
     assistant = _get_assistant(scan_id)
-    result = assistant.get_detailed_fix(req.finding_code, device_info, req.language)
+    result = assistant.get_detailed_fix(req.finding_code, device_info, req.language, req.expert)
 
     return {
         "fix_text": result.get("text", ""),
         "source": result.get("source", "template"),
-        "search_results": result.get("search_results", []),
+        "agents": result.get("agents", []),
+        "search_results": [{"title": r.get("title", ""), "href": r.get("href", "")} for r in result.get("search_results", [])],
         "generic_advice": result.get("generic_advice", ""),
         "template_steps": result.get("template_steps", []),
     }
@@ -597,6 +608,8 @@ def get_ai_settings():
 
 @router.put("/settings/ai")
 def update_ai_settings(req: AISettingsRequest):
+    if req.provider not in ("local", "groq"):
+        raise HTTPException(400, "provider must be 'local' or 'groq'")
     _ai_settings["provider"] = req.provider
     if req.groq_api_key is not None:
         _ai_settings["groq_api_key"] = req.groq_api_key
@@ -605,57 +618,137 @@ def update_ai_settings(req: AISettingsRequest):
 
 
 # ── Fix Commands & Magic Portal ───────────────────────────────────────
+#
+# A fix command only fixes the computer it runs on. So:
+#   - finding on THIS computer  -> "Auto-fix" runs the command behind a Windows UAC prompt (fix_runner);
+#   - finding on another device -> nothing runs; we explain the fix, link the device's admin panel
+#     when the scan shows one, and the agents can look up model-specific steps online.
+# Commands always come from our templates (ai/fix_commands.py), never from the request.
 
 class FixRequest(BaseModel):
     finding_code: str
     ip: str
     port: int | None = None
     gateway: str | None = None
+    scan_id: int | None = None
     language: str = "ro"
+
+
+_HTTPS_PORTS = (443, 8443)
+_HTTP_PORTS = (80, 8080, 8000, 8888, 8081)
+
+
+def _find_device(scan_data: dict, ip: str) -> dict | None:
+    return next((d for d in scan_data.get("devices", []) if d.get("ip") == ip), None)
+
+
+def _panel_url(device: dict | None) -> str | None:
+    """The device's web admin page, from the open ports the scan saw. HTTPS preferred."""
+    if not device:
+        return None
+    ip = device.get("ip", "")
+    ports = {p.get("port"): (p.get("service") or "").lower() for p in device.get("open_ports", [])}
+    for port in _HTTPS_PORTS:
+        if port in ports:
+            return f"https://{ip}" + ("" if port == 443 else f":{port}")
+    for port, service in ports.items():
+        if "https" in service or "ssl/http" in service:
+            return f"https://{ip}:{port}"
+    for port in _HTTP_PORTS:
+        if port in ports:
+            return f"http://{ip}" + ("" if port == 80 else f":{port}")
+    for port, service in ports.items():
+        if service.startswith("http"):
+            return f"http://{ip}:{port}"
+    return None
+
+
+def _gateway_device(scan_data: dict, hint: str | None) -> dict | None:
+    devices = scan_data.get("devices", [])
+    if hint:
+        found = _find_device(scan_data, hint)
+        if found:
+            return found
+    router = next((d for d in devices if d.get("type") == "router" or d.get("is_gateway")), None)
+    if router:
+        return router
+    gw = detect_network().get("gateway")
+    return _find_device(scan_data, gw) or ({"ip": gw, "open_ports": [{"port": 80, "service": "http"}]} if gw else None)
+
+
+def _fix_for(req: FixRequest) -> tuple[dict, dict | None]:
+    scan_data = {}
+    if req.scan_id is not None:
+        scan_data = db.get_snapshot(req.scan_id) or {}
+    elif scans := db.get_all_scans(None):
+        scan_data = db.get_snapshot(scans[0]["id"]) or {}
+
+    template = FIX_COMMANDS.get(req.finding_code)
+    if not template:
+        raise HTTPException(404, f"No fix template for {req.finding_code}")
+
+    device = _find_device(scan_data, req.ip)
+    panel_device = _gateway_device(scan_data, req.gateway) if template.get("panel_on_gateway") else device
+    this_pc = fix_runner.is_this_pc(req.ip)
+    fix = get_fix_command(
+        req.finding_code, {"ip": req.ip, "port": req.port or 0}, req.language,
+        is_this_pc=this_pc, panel_url=None if this_pc else _panel_url(panel_device),
+        device_type=(device or {}).get("type", ""),
+    )
+    fix["device"] = {
+        "ip": req.ip,
+        "vendor": (device or {}).get("vendor", ""),
+        "type": (device or {}).get("type", ""),
+        "label": (device or {}).get("type_label_ro" if req.language == "ro" else "type_label_en", ""),
+    }
+    return fix, device
 
 
 @router.post("/fix/info")
 def get_fix_info(req: FixRequest):
-    """Get the fix command/portal info for a finding (without executing)."""
-    params = {"ip": req.ip, "port": str(req.port or 0), "gateway": req.gateway or "192.168.1.1"}
-    result = get_fix_command(req.finding_code, params, req.language)
-    if not result:
-        raise HTTPException(404, f"No fix template for {req.finding_code}")
-    return result
+    """How to fix a finding: run here (this PC), open the device panel, or follow manual steps."""
+    fix, _ = _fix_for(req)
+    return fix
 
 
-_MANUAL_FIX_MESSAGE = {
-    "ro": ("Din motive de siguranta, aplicatia nu ruleaza comenzi pe calculatorul tau. "
-           "Copiaza comanda si ruleaz-o tu, in PowerShell ca administrator, pe dispozitivul {ip}."),
-    "en": ("For your safety, the app never runs commands on your computer. "
-           "Copy the command and run it yourself, in PowerShell as administrator, on the device {ip}."),
+_MESSAGES = {
+    "elevated": {
+        "ro": "Windows iti cere permisiunea de administrator. Apasa 'Da' si urmareste fereastra PowerShell.",
+        "en": "Windows is asking for administrator permission. Click 'Yes' and watch the PowerShell window.",
+    },
+    "denied": {
+        "ro": "Ai refuzat cererea de administrator, asa ca nu s-a schimbat nimic.",
+        "en": "You declined the administrator prompt, so nothing was changed.",
+    },
+    "remote": {
+        "ro": "Problema este pe {ip}, nu pe acest calculator, asa ca o comanda rulata aici nu ar rezolva-o. Urmeaza pasii pentru acel dispozitiv.",
+        "en": "The problem is on {ip}, not on this computer, so a command run here would not fix it. Follow the steps for that device.",
+    },
 }
 
 
 @router.post("/fix/execute")
 def execute_fix(req: FixRequest):
-    """Show-only: never runs anything (security fix).
-
-    Running admin PowerShell from a web API let any caller change this laptop's
-    system settings, and the commands acted on this laptop even when the finding
-    was on another device. The brief asks for steps a person follows (FR-08) and
-    admin rights only for the live scan (NFR-04), so the command is returned for
-    the user to run themselves on the right device.
-    """
-    params = {"ip": req.ip, "port": str(req.port or 0), "gateway": req.gateway or "192.168.1.1"}
-    fix = get_fix_command(req.finding_code, params, req.language)
-    if not fix:
-        raise HTTPException(404, f"No fix template for {req.finding_code}")
-
-    if fix["fix_type"] == "portal":
-        return {"status": "portal", "portal_url": fix.get("portal_url", ""), "message": fix["explanation"]}
-
+    fix, _ = _fix_for(req)
     lang = "ro" if req.language == "ro" else "en"
-    return {
-        "status": "manual",
-        "executed": False,
-        "command": fix.get("command", ""),
-        "requires_admin": fix.get("requires_admin", False),
-        "explanation": fix["explanation"],
-        "message": _MANUAL_FIX_MESSAGE[lang].format(ip=req.ip),
-    }
+    base = {"command": fix["command"], "explanation": fix["explanation"], "executed": False}
+
+    if not fix["can_run"]:
+        status = "portal" if fix["portal_url"] else "remote"
+        return {**base, "status": status, "portal_url": fix["portal_url"],
+                "message": _MESSAGES["remote"][lang].format(ip=req.ip)}
+
+    launched = fix_runner.launch_elevated(fix["command"], req.ip, title=f"NetScanner - {req.finding_code}")
+    status = launched["status"]
+    if status == "elevated":
+        return {**base, "status": "elevated", "executed": True, "run_id": launched["run_id"],
+                "message": _MESSAGES["elevated"][lang]}
+    if status == "denied":
+        return {**base, "status": "denied", "message": _MESSAGES["denied"][lang]}
+    return {**base, "status": "error", "message": launched.get("message", "")}
+
+
+@router.get("/fix/result/{run_id}")
+def fix_result(run_id: str):
+    """Outcome of an elevated fix: pending until the PowerShell window finishes."""
+    return fix_runner.read_result(run_id)

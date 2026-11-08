@@ -27,38 +27,38 @@ function Sparkline({ points }) {
     >
       <defs>
         <linearGradient id="trendFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stopColor="#3F6B4E" stopOpacity="0.6" />
-          <stop offset="100%" stopColor="#3F6B4E" stopOpacity="0.05" />
+          <stop offset="0%" stopColor="var(--chart-line)" stopOpacity="0.6" />
+          <stop offset="100%" stopColor="var(--chart-line)" stopOpacity="0.05" />
         </linearGradient>
       </defs>
       {/* Card background: white */}
-      <rect x="0" y="0" width={w} height={h} fill="#FFFFFF" rx="16" />
+      <rect x="0" y="0" width={w} height={h} fill="var(--chart-bg)" rx="16" />
       {/* 70-line threshold (safe score) */}
       <line
         x1={padX}
         x2={w - padX}
         y1={h - padY - (70 / 100) * (h - padY * 2)}
         y2={h - padY - (70 / 100) * (h - padY * 2)}
-        stroke="#86B49A"
+        stroke="var(--chart-dashed)"
         strokeDasharray="4 4"
         strokeWidth="1.5"
       />
       <text x={w - padX - 2} y={h - padY - (70 / 100) * (h - padY * 2) - 6}
-        fontSize="12" fill="#3F6B4E" textAnchor="end" fontWeight="600">
+        fontSize="12" fill="var(--chart-line)" textAnchor="end" fontWeight="600">
         70
       </text>
       {/* Area under curve */}
       <path d={area} fill="url(#trendFill)" />
       {/* Line */}
-      <path d={line} fill="none" stroke="#3F6B4E" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+      <path d={line} fill="none" stroke="var(--chart-line)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       {/* Points + labels */}
       {xs.map((x, i) => (
         <g key={i}>
-          <circle cx={x} cy={ys[i]} r="6" fill="#FFFFFF" stroke="#3F6B4E" strokeWidth="3" />
-          <text x={x} y={h - 10} textAnchor="middle" fontSize="13" fill="#3F6B4E" fontWeight="600">
+          <circle cx={x} cy={ys[i]} r="6" fill="var(--chart-point-fill)" stroke="var(--chart-line)" strokeWidth="3" />
+          <text x={x} y={h - 10} textAnchor="middle" fontSize="13" fill="var(--chart-label-date)" fontWeight="600">
             {points[i].date?.slice(5)}
           </text>
-          <text x={x} y={ys[i] - 14} textAnchor="middle" fontSize="18" fill="#1F3A2A" fontWeight="700">
+          <text x={x} y={ys[i] - 14} textAnchor="middle" fontSize="18" fill="var(--chart-label-score)" fontWeight="700">
             {points[i].score}
           </text>
         </g>
