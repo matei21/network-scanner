@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { narrateScan } from "../lib/api";
 import { BookOpen, Loader2 } from "lucide-react";
+import SpeakButton from "./SpeakButton";
 
 export default function ScanNarrator({ scanId }) {
   const { lang, t } = useLanguage();
@@ -43,6 +44,7 @@ export default function ScanNarrator({ scanId }) {
         <h3 className="font-semibold text-blue-900">
           {lang === "ro" ? "Rezumatul retelei tale" : "Your network summary"}
         </h3>
+        <SpeakButton text={data.narrative} lang={lang} className="ml-auto" />
       </div>
       <p className="text-base text-blue-900 whitespace-pre-line">{data.narrative}</p>
     </div>

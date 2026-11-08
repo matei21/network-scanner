@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { narrateDiffVsPrevious } from "../lib/api";
+import SpeakButton from "./SpeakButton";
 import { GitCompareArrows, Loader2, TrendingUp, TrendingDown, Minus } from "lucide-react";
 
 export default function DiffNarrator({ scanId }) {
@@ -53,6 +54,7 @@ export default function DiffNarrator({ scanId }) {
           {lang === "ro" ? "Comparatie cu scanul anterior" : "Comparison with previous scan"}
         </h3>
         <TrendIcon className={`w-5 h-5 ${trendColor}`} aria-hidden />
+        <SpeakButton text={data.narrative} lang={lang} className="ml-auto" />
       </div>
       <p className="text-base text-purple-900 whitespace-pre-line">{data.narrative}</p>
     </div>

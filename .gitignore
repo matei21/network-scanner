@@ -58,3 +58,6 @@ scans/
 # Allowed: Validation / Test Set files and our lab scans (MACs masked: python lab/mask_macs.py data/lab;
 # tests/test_privacy_fixtures.py fails if a lab scan still has a full MAC).
 !data/**/*.xml
+
+# Local demo scan with findings on THIS laptop (for the Auto-fix buttons); never committed, not a test fixture.
+demo_local/

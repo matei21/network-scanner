@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { askAssistant } from "../lib/api";
-import { X, Send, Loader2, GitBranch, Activity, BookOpen, Search, Library, Wrench, ShieldCheck, ChevronDown, ChevronUp, Globe, AlertTriangle, Route } from "lucide-react";
+import { canListen, createRecognizer, speak, stopSpeaking } from "../lib/speech";
+import SpeakButton from "./SpeakButton";
+import { X, Send, Loader2, GitBranch, Activity, BookOpen, Search, Library, Wrench, ShieldCheck, ChevronDown, ChevronUp, Globe, AlertTriangle, Route, Mic, MicOff } from "lucide-react";
 
 const WEB_TEXT = {
   ro: {
@@ -17,6 +19,32 @@ const WEB_TEXT = {
     asked: "Internet search",
   },
 };
+
+const MIC_TEXT = {
+  ro: {
+    start: "Vorbeste (microfon)",
+    stop: "Opreste microfonul",
+    listening: "Te ascult... vorbeste acum.",
+    denied: "Permite accesul la microfon din browser (iconita de langa adresa).",
+    noSpeech: "Nu am auzit nimic. Apasa din nou pe microfon si vorbeste.",
+    network: "Recunoasterea vocii are nevoie de internet.",
+    other: "Microfonul nu a functionat. Poti scrie intrebarea.",
+  },
+  en: {
+    start: "Speak (microphone)",
+    stop: "Stop the microphone",
+    listening: "Listening... speak now.",
+    denied: "Allow microphone access in the browser (icon next to the address bar).",
+    noSpeech: "I didn't hear anything. Press the microphone again and speak.",
+    network: "Speech recognition needs an internet connection.",
+    other: "The microphone didn't work. You can type the question.",
+  },
+};
+
+function spokenAnswer(res) {
+  const final = (res.agents || []).filter((a) => a.agent === res.agent).pop();
+  return (final?.text || res.answer || "").replace(/^⚠[^\n]*\n+/, "");
+}
 
 const AGENT_STYLE = {
   orchestrator: { Icon: GitBranch, color: "text-gray-600", ring: "border-gray-200 bg-gray-50" },
@@ -109,6 +137,9 @@ function AssistantMessage({ m, lang, busy, onFollowup, onSearchWeb }) {
       ) : (
         <div className="rounded-lg p-3 text-base bg-white border border-gray-200 whitespace-pre-line">{m.text}</div>
       )}
+      <div className="flex justify-end">
+        <SpeakButton text={finalStep?.text || m.text} lang={lang} />
+      </div>
 
       {trace.length > 0 && (
         <div>
@@ -183,8 +214,55 @@ export default function MrPotato({ scanId, expert = false }) {
   const [q, setQ] = useState("");
   const [busy, setBusy] = useState(false);
   const [msgs, setMsgs] = useState([]);
+  const [listening, setListening] = useState(false);
+  const [micError, setMicError] = useState("");
   const wrapRef = useRef(null);
   const endRef = useRef(null);
+  const recRef = useRef(null);
+  const askedByVoice = useRef(false);
+  const M = MIC_TEXT[lang] || MIC_TEXT.ro;
+
+  useEffect(() => () => recRef.current?.abort(), []);
+  useEffect(() => {
+    if (!open) recRef.current?.abort();
+  }, [open]);
+
+  function toggleMic() {
+    if (listening) {
+      recRef.current?.stop();
+      return;
+    }
+    stopSpeaking();
+    setMicError("");
+    let heard = "";
+    const rec = createRecognizer(lang, {
+      onText: (text, isFinal) => {
+        setQ(text);
+        if (isFinal) heard = text;
+      },
+      onError: (err) => {
+        const key = err === "not-allowed" || err === "service-not-allowed" ? "denied"
+          : err === "no-speech" ? "noSpeech" : err === "network" ? "network" : err === "aborted" ? null : "other";
+        if (key) setMicError(M[key]);
+      },
+      onEnd: () => {
+        setListening(false);
+        recRef.current = null;
+        if (heard) {
+          askedByVoice.current = true; // the answer to a spoken question is read back
+          send(heard);
+        }
+      },
+    });
+    if (!rec) return;
+    recRef.current = rec;
+    try {
+      rec.start();
+      setListening(true);
+    } catch {
+      setMicError(M.other);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -229,9 +307,11 @@ export default function MrPotato({ scanId, expert = false }) {
           fromWeb: !!res.from_web,
         },
       ]);
+      if (askedByVoice.current) speak(spokenAnswer(res), lang, "potato-voice-answer");
     } catch (err) {
       setMsgs((m) => [...m, { role: "assistant", text: `(${String(err.message || err)})` }]);
     } finally {
+      askedByVoice.current = false;
       setBusy(false);
     }
   }
@@ -308,6 +388,11 @@ export default function MrPotato({ scanId, expert = false }) {
             <div ref={endRef} />
           </div>
 
+          {(listening || micError) && (
+            <p className={`px-3 pt-2 text-base ${micError ? "text-red-700" : "text-gray-700"}`} role="status">
+              {micError || M.listening}
+            </p>
+          )}
           <form onSubmit={submit} className="flex gap-2 px-3 py-3 border-t border-gray-200">
             <label htmlFor="potato-q" className="sr-only">
               {t("chat_placeholder")}
@@ -321,6 +406,21 @@ export default function MrPotato({ scanId, expert = false }) {
               disabled={busy}
               className="flex-1 min-w-0 px-3 py-2 border border-gray-300 rounded-lg text-base"
             />
+            {canListen() && (
+              <button
+                type="button"
+                onClick={toggleMic}
+                disabled={busy}
+                aria-pressed={listening}
+                aria-label={listening ? M.stop : M.start}
+                title={listening ? M.stop : M.start}
+                className={`inline-flex items-center px-3 py-2 rounded-lg border disabled:opacity-50 ${
+                  listening ? "border-red-400 bg-red-600 text-white animate-pulse" : "border-gray-300 bg-white hover:bg-gray-50"
+                }`}
+              >
+                {listening ? <MicOff className="w-4 h-4" aria-hidden /> : <Mic className="w-4 h-4" aria-hidden />}
+              </button>
+            )}
             <button
               type="submit"
               disabled={busy || !q.trim()}
