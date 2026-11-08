@@ -10,8 +10,12 @@ import MapLegend from "./components/MapLegend";
 import HistoryView from "./components/HistoryView";
 import ErrorBanner from "./components/ErrorBanner";
 import MrPotato from "./components/MrPotato";
-import { getLatestScan, uploadXml, runLiveScan, deleteHistory } from "./lib/api";
-import { flattenFindings, summarySentence, heroVerdict } from "./lib/findings";
+import ScanNarrator from "./components/ScanNarrator";
+import DiffNarrator from "./components/DiffNarrator";
+import PdfDownload from "./components/PdfDownload";
+import AISettings from "./components/AISettings";
+import { getLatestScan, uploadXml, runLiveScan, deleteHistory, getDeviceNames, suggestDeviceNames } from "./lib/api";
+import { flattenFindings, summarySentence } from "./lib/findings";
 
 function AppInner() {
   const { t, lang } = useLanguage();
@@ -20,6 +24,8 @@ function AppInner() {
   const [busy, setBusy] = useState(false);
   const [tab, setTab] = useState("overview");
   const [expert, setExpert] = useState(false);
+  const [deviceNames, setDeviceNames] = useState({});
+  const [suggestedNames, setSuggestedNames] = useState({});
 
   useEffect(() => {
     let cancelled = false;
@@ -34,6 +40,16 @@ function AppInner() {
       cancelled = true;
     };
   }, []);
+
+  useEffect(() => {
+    if (!scan?.scan_id) return;
+    getDeviceNames().then(setDeviceNames).catch(() => {});
+    suggestDeviceNames(scan.scan_id, lang).then(setSuggestedNames).catch(() => {});
+  }, [scan?.scan_id, lang]);
+
+  function handleNameSaved(ip, name) {
+    setDeviceNames((prev) => ({ ...prev, [ip]: { ...prev[ip], custom_name: name } }));
+  }
 
   async function onUpload(file) {
     setBusy(true);
@@ -99,10 +115,8 @@ function AppInner() {
         {tab === "overview" && (
           <div className="space-y-5">
             <ScoreSemaphore score={scan?.score} scan={scan} loading={loading} />
-            {scan && scan.status !== "error" && (
-              <div className="summary-card rounded-2xl p-4" data-verdict={heroVerdict(scan)}>
-                <p className="text-lg">{summarySentence(scan, lang)}</p>
-              </div>
+            {scan && scan.status !== "error" && scan.scan_id && (
+              <ScanNarrator scanId={scan.scan_id} />
             )}
             {scan && scan.status !== "error" && (
               <NetworkMap devices={scan?.devices || []} />
@@ -114,7 +128,13 @@ function AppInner() {
         )}
 
         {tab === "devices" && (
-          <DeviceList devices={scan?.devices || []} expert={expert} />
+          <DeviceList
+            devices={scan?.devices || []}
+            expert={expert}
+            deviceNames={deviceNames}
+            onNameSaved={handleNameSaved}
+            suggestedNames={suggestedNames}
+          />
         )}
 
         {tab === "findings" && (
@@ -122,7 +142,19 @@ function AppInner() {
         )}
 
         {tab === "history" && (
-          <HistoryView scan={scan} onDelete={onDeleteHistory} />
+          <>
+            {scan?.scan_id && <DiffNarrator scanId={scan.scan_id} />}
+            <HistoryView scan={scan} onDelete={onDeleteHistory} />
+          </>
+        )}
+        {/* Bottom section: PDF download + AI settings */}
+        {scan && scan.status !== "error" && (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+            <div className="flex items-center">
+              <PdfDownload scanId={scan.scan_id} />
+            </div>
+            <AISettings />
+          </div>
         )}
       </main>
       <footer className="text-center text-xs py-4">

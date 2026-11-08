@@ -24,9 +24,9 @@ from ai.search_service import search_device_guide, format_search_results
 class Assistant:
     """Q&A assistant care raspunde la intrebari despre un scan."""
 
-    def __init__(self, scan_data: dict, enable_cloud: bool = False, enable_local: bool = True):
+    def __init__(self, scan_data: dict, enable_cloud: bool = False, enable_local: bool = True, groq_api_key: str | None = None):
         self.scan_data = scan_data
-        self.ai = AIService(enable_cloud=enable_cloud, enable_local=enable_local)
+        self.ai = AIService(enable_cloud=enable_cloud, enable_local=enable_local, groq_api_key=groq_api_key)
         self.chatbot = Chatbot(self.ai, scan_data)
 
     def ask(self, question: str, language: str = "ro") -> dict:
@@ -122,7 +122,105 @@ def enrich_scan_data(scan_result_dict: dict) -> dict:
                     finding[f"owasp_iot"] = template["owasp_iot"]
                 finding[f"risk_scenario_{lang}"] = get_risk_scenario(code, lang)
 
+    # Compute custom risk score and attach it
+    scan_result_dict["custom_risk_score"] = custom_risk_score(scan_result_dict)
+
     return scan_result_dict
+
+
+# ── Custom Risk Score ─────────────────────────────────────────────────
+
+_DEVICE_TYPE_WEIGHT = {
+    "camera": 1.5,
+    "router": 1.3,
+    "smart_home": 1.2,
+    "server": 1.1,
+    "computer": 1.0,
+    "phone": 1.0,
+    "smart_tv": 0.9,
+    "printer": 0.8,
+    "unknown": 1.0,
+}
+
+_DANGEROUS_COMBOS = {
+    frozenset({"TELNET_OPEN", "OUTDATED_SERVICE"}),
+    frozenset({"TELNET_OPEN", "HTTP_ADMIN_CLEARTEXT"}),
+    frozenset({"RDP_EXPOSED", "OUTDATED_SERVICE"}),
+    frozenset({"VNC_EXPOSED", "OUTDATED_SERVICE"}),
+    frozenset({"DB_EXPOSED", "SMB_EXPOSED"}),
+    frozenset({"CAMERA_STREAM_EXPOSED", "HTTP_ADMIN_CLEARTEXT"}),
+    frozenset({"UPNP_EXPOSED", "TELNET_OPEN"}),
+}
+
+
+def custom_risk_score(scan_data: dict) -> dict:
+    """Compute a weighted risk score using multiple heuristics.
+
+    Returns dict with total score, breakdown, and explanation.
+    Standard score: max(0, 100 - sum(points)).
+    Custom score: applies device-type weights, density penalty,
+    dangerous combos, systemic penalty, and gateway penalty.
+    """
+    devices = scan_data.get("devices", [])
+    standard_score = scan_data.get("score", 100)
+    if not devices:
+        return {"score": standard_score, "breakdown": [], "standard_score": standard_score}
+
+    total_deductions = 0
+    breakdown = []
+
+    # 1. Weighted finding points per device type
+    weighted_points = 0
+    for device in devices:
+        device_type = device.get("type", "unknown")
+        weight = _DEVICE_TYPE_WEIGHT.get(device_type, 1.0)
+        for finding in device.get("findings", []):
+            pts = finding.get("points", 0)
+            weighted_points += pts * weight
+
+    base_deduction = round(weighted_points)
+    if base_deduction != sum(f.get("points", 0) for d in devices for f in d.get("findings", [])):
+        breakdown.append(("device_weight", round(weighted_points - sum(f.get("points", 0) for d in devices for f in d.get("findings", [])))))
+
+    total_deductions += base_deduction
+
+    # 2. Density penalty: device with 3+ findings gets extra -5 each
+    for device in devices:
+        n = len(device.get("findings", []))
+        if n >= 3:
+            penalty = (n - 2) * 5
+            total_deductions += penalty
+            breakdown.append(("density", -penalty, device.get("ip", "?")))
+
+    # 3. Dangerous combinations
+    for device in devices:
+        codes = {f.get("code", "") for f in device.get("findings", [])}
+        for combo in _DANGEROUS_COMBOS:
+            if combo.issubset(codes):
+                total_deductions += 10
+                breakdown.append(("combo", -10, f"{'+'.join(combo)} on {device.get('ip', '?')}"))
+
+    # 4. Systemic penalty: >60% devices affected
+    devices_with_findings = sum(1 for d in devices if d.get("findings"))
+    if len(devices) > 1 and devices_with_findings / len(devices) > 0.6:
+        total_deductions += 10
+        breakdown.append(("systemic", -10, f"{devices_with_findings}/{len(devices)} devices affected"))
+
+    # 5. Gateway penalty: router with HIGH finding
+    for device in devices:
+        if device.get("type") == "router" or device.get("is_gateway"):
+            has_high = any(f.get("severity") == "high" for f in device.get("findings", []))
+            if has_high:
+                total_deductions += 15
+                breakdown.append(("gateway_high", -15, device.get("ip", "?")))
+                break
+
+    custom = max(0, 100 - total_deductions)
+    return {
+        "score": custom,
+        "standard_score": standard_score,
+        "breakdown": breakdown,
+    }
 
 
 def enrich_findings_list(findings: list[dict]) -> list[dict]:
@@ -686,3 +784,82 @@ def suggest_followups(scan_data: dict, answer_text: str, language: str = "ro") -
         suggestions.append(general[lang])
 
     return suggestions[:3]
+
+
+# ── Scan Diff Narration ───────────────────────────────────────────────
+
+def narrate_diff(diff_data: dict, language: str = "ro") -> dict:
+    """Generate a narrative summary comparing two scans."""
+    old_score = diff_data.get("old_score")
+    new_score = diff_data.get("new_score")
+    resolved = diff_data.get("resolved_findings", [])
+    new_findings = diff_data.get("new_findings", [])
+    added = diff_data.get("devices_added", [])
+    removed = diff_data.get("devices_removed", [])
+
+    if language == "ro":
+        parts = []
+        if old_score is not None and new_score is not None:
+            delta = new_score - old_score
+            if delta > 0:
+                parts.append(f"Scorul de securitate a crescut de la {old_score} la {new_score} (+{delta} puncte).")
+            elif delta < 0:
+                parts.append(f"Scorul de securitate a scazut de la {old_score} la {new_score} ({delta} puncte).")
+            else:
+                parts.append(f"Scorul de securitate a ramas {new_score}.")
+
+        if resolved:
+            parts.append(f"\n{len(resolved)} problem{'e rezolvate' if len(resolved) != 1 else 'a rezolvata'}:")
+            for f in resolved:
+                parts.append(f"  - {f['finding_code']} pe {f['ip']} (port {f['port']})")
+
+        if new_findings:
+            parts.append(f"\n{len(new_findings)} problem{'e noi' if len(new_findings) != 1 else 'a noua'}:")
+            for f in new_findings:
+                parts.append(f"  - {f['finding_code']} pe {f['ip']} (port {f['port']})")
+
+        if added:
+            parts.append(f"\n{len(added)} dispozitiv{'e noi' if len(added) != 1 else ' nou'}: {', '.join(added)}")
+        if removed:
+            parts.append(f"\n{len(removed)} dispozitiv{'e disparute' if len(removed) != 1 else ' disparut'}: {', '.join(removed)}")
+
+        if not resolved and not new_findings and not added and not removed:
+            parts.append("Nicio schimbare detectata fata de scanul anterior.")
+    else:
+        parts = []
+        if old_score is not None and new_score is not None:
+            delta = new_score - old_score
+            if delta > 0:
+                parts.append(f"Security score improved from {old_score} to {new_score} (+{delta} points).")
+            elif delta < 0:
+                parts.append(f"Security score dropped from {old_score} to {new_score} ({delta} points).")
+            else:
+                parts.append(f"Security score remained at {new_score}.")
+
+        if resolved:
+            parts.append(f"\n{len(resolved)} resolved issue{'s' if len(resolved) != 1 else ''}:")
+            for f in resolved:
+                parts.append(f"  - {f['finding_code']} on {f['ip']} (port {f['port']})")
+
+        if new_findings:
+            parts.append(f"\n{len(new_findings)} new issue{'s' if len(new_findings) != 1 else ''}:")
+            for f in new_findings:
+                parts.append(f"  - {f['finding_code']} on {f['ip']} (port {f['port']})")
+
+        if added:
+            parts.append(f"\n{len(added)} new device{'s' if len(added) != 1 else ''}: {', '.join(added)}")
+        if removed:
+            parts.append(f"\n{len(removed)} removed device{'s' if len(removed) != 1 else ''}: {', '.join(removed)}")
+
+        if not resolved and not new_findings and not added and not removed:
+            parts.append("No changes detected compared to the previous scan.")
+
+    return {
+        "narrative": "\n".join(parts),
+        "old_score": old_score,
+        "new_score": new_score,
+        "resolved_count": len(resolved),
+        "new_count": len(new_findings),
+        "devices_added_count": len(added),
+        "devices_removed_count": len(removed),
+    }

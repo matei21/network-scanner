@@ -80,6 +80,12 @@ const dict = {
     chat_send: "Trimite",
     chat_disclaimer:
       "Raspunsurile se bazeaza doar pe scanul curent. Daca nu stiu, iti spun.",
+
+    risk_scenario_label: "Ce s-ar putea intampla",
+    device_rename: "Redenumeste",
+    pdf_download: "Descarca raport PDF",
+    diff_title: "Comparatie cu scanul anterior",
+    narrator_title: "Rezumatul retelei tale",
   },
   en: {
     app_title: "Network scanner",
@@ -157,6 +163,12 @@ const dict = {
     chat_send: "Send",
     chat_disclaimer:
       "Answers use only the current scan. If I don't know, I'll tell you.",
+
+    risk_scenario_label: "What could happen",
+    device_rename: "Rename",
+    pdf_download: "Download PDF report",
+    diff_title: "Comparison with previous scan",
+    narrator_title: "Your network summary",
   },
 };
 

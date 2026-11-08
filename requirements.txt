@@ -18,5 +18,11 @@ huggingface-hub>=0.25.0
 # Web search (pentru instructiuni specifice per device)
 ddgs>=9.0.0
 
+# PDF report generation
+fpdf2>=2.8.0
+
+# Groq cloud LLM (optional, for users who provide an API key)
+groq>=0.11.0
+
 # XML parsing (mai robust decat stdlib)
 lxml>=5.0.0

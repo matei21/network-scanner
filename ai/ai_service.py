@@ -105,25 +105,38 @@ class LocalLLM:
 class AIService:
     """
     Serviciul principal de AI. Incearca in ordine:
-    local -> template.
+    groq (if key) -> local -> template.
     """
 
-    def __init__(self, enable_cloud=False, enable_local=True):
+    def __init__(self, enable_cloud=False, enable_local=True, groq_api_key=None):
         self.local = LocalLLM() if enable_local else None
+        self.groq = None
+        if groq_api_key:
+            try:
+                from ai.groq_client import GroqLLM
+                self.groq = GroqLLM(groq_api_key)
+            except Exception as e:
+                logger.warning("Groq init failed: %s", e)
 
     @property
     def status(self):
         return {
-            "cloud": False,
+            "groq": self.groq.available if self.groq else False,
             "local": self.local.available if self.local else False,
             "template": True,
         }
 
     def chat(self, system_prompt, user_message, finding_code=None, language="ro"):
         """
-        Trimite un mesaj la LLM. Incearca local, apoi template.
+        Trimite un mesaj la LLM. Incearca groq, local, apoi template.
         Returneaza dict cu 'text' si 'source'.
         """
+        # Nivel 0: Groq cloud (if user provided API key)
+        if self.groq and self.groq.available:
+            result = self.groq.chat(system_prompt, user_message)
+            if result:
+                return {"text": result, "source": "groq"}
+
         # Nivel 1: Local
         if self.local and self.local.available:
             result = self.local.chat(system_prompt, user_message)

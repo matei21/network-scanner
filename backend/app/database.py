@@ -63,6 +63,11 @@ def init_db() -> None:
             version TEXT,
             FOREIGN KEY (scan_id) REFERENCES scans(id) ON DELETE CASCADE
         );
+        CREATE TABLE IF NOT EXISTS device_names (
+            ip TEXT PRIMARY KEY,
+            custom_name TEXT NOT NULL,
+            suggested_name TEXT
+        );
     """)
     # Databases created before these columns existed get them added in place.
     columns = {row["name"] for row in conn.execute("PRAGMA table_info(scans)")}
@@ -225,6 +230,24 @@ def get_diff(old_id: int, new_id: int) -> dict:
             for ip, port, proto in sorted(old_ports.keys() - new_ports.keys())
         ],
     }
+
+
+def get_device_names() -> dict[str, dict]:
+    conn = _connect()
+    rows = conn.execute("SELECT ip, custom_name, suggested_name FROM device_names").fetchall()
+    conn.close()
+    return {r["ip"]: {"custom_name": r["custom_name"], "suggested_name": r["suggested_name"]} for r in rows}
+
+
+def save_device_name(ip: str, custom_name: str, suggested_name: str | None = None) -> None:
+    conn = _connect()
+    conn.execute(
+        "INSERT INTO device_names (ip, custom_name, suggested_name) VALUES (?, ?, ?) "
+        "ON CONFLICT(ip) DO UPDATE SET custom_name = excluded.custom_name, suggested_name = excluded.suggested_name",
+        (ip, custom_name, suggested_name),
+    )
+    conn.commit()
+    conn.close()
 
 
 def delete_all_history() -> int:

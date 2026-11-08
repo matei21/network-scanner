@@ -181,3 +181,23 @@ def guess_device_type(host):
         "label_ro": sig["label"]["ro"],
         "label_en": sig["label"]["en"],
     }
+
+
+def suggest_device_name(device: dict, language: str = "ro") -> str:
+    """Generate a friendly suggested name like 'Camera de supraveghere Hikvision'."""
+    device_type = device.get("type", "unknown")
+    vendor = device.get("vendor", "")
+    hostname = device.get("hostname", "")
+
+    sig = DEVICE_SIGNATURES.get(device_type)
+    if sig:
+        label = sig["label"].get(language, sig["label"]["ro"])
+    else:
+        label = "Dispozitiv necunoscut" if language == "ro" else "Unknown device"
+
+    vendor_short = vendor.split()[0] if vendor else ""
+    if vendor_short and vendor_short.lower() not in label.lower():
+        return f"{label} {vendor_short}"
+    if hostname and hostname.lower() not in ("localhost", "") and len(hostname) < 30:
+        return f"{label} ({hostname})"
+    return label

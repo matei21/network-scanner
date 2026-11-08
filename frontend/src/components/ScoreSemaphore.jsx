@@ -5,7 +5,7 @@ import { CheckCircle2, AlertTriangle, ShieldAlert, Loader2 } from "lucide-react"
 // Big traffic-light score. Color + icon + word label — color is never the
 // only signal (NFR-08).
 export default function ScoreSemaphore({ score, scan, loading }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const verdict = heroVerdict(scan);
 
   if (loading) {
@@ -54,6 +54,10 @@ export default function ScoreSemaphore({ score, scan, loading }) {
 
   const { Icon } = theme;
 
+  const customRisk = scan?.custom_risk_score;
+  const customScore = customRisk?.score;
+  const riskLabel = lang === "ro" ? "Scor de risc" : "Risk score";
+
   return (
     <div
       className="hero-card relative p-6 rounded-2xl"
@@ -76,6 +80,14 @@ export default function ScoreSemaphore({ score, scan, loading }) {
             <span className="text-2xl font-semibold">{theme.label}</span>
           </div>
           <p className="mt-2 text-lg">{theme.desc}</p>
+          {customScore != null && customScore !== score && (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-sm text-gray-600">{riskLabel}:</span>
+              <span className={`text-lg font-bold tabular-nums ${customScore < 40 ? "text-risk-high" : customScore < 70 ? "text-risk-medium" : "text-risk-safe"}`}>
+                {customScore}/100
+              </span>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -39,10 +39,10 @@ export default function MrPotato({ scanId }) {
     setQ("");
     setBusy(true);
     try {
-      const res = await askAssistant(text, scanId);
+      const res = await askAssistant(text, scanId, lang);
       setMsgs((m) => [
         ...m,
-        { role: "assistant", text: res.answer, cites: res.cites || [] },
+        { role: "assistant", text: res.answer, cites: res.cites || [], followups: res.followups || [] },
       ]);
     } catch (err) {
       setMsgs((m) => [
@@ -125,6 +125,21 @@ export default function MrPotato({ scanId }) {
                       >
                         {c.ip}:{c.port} {c.code}
                       </code>
+                    ))}
+                  </div>
+                )}
+                {m.followups && m.followups.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {m.followups.map((fq, j) => (
+                      <button
+                        key={j}
+                        type="button"
+                        disabled={busy}
+                        onClick={() => { setQ(fq); }}
+                        className="text-xs px-2 py-1 rounded-full bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 disabled:opacity-50"
+                      >
+                        {fq}
+                      </button>
                     ))}
                   </div>
                 )}

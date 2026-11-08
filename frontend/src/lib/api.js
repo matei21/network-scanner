@@ -121,6 +121,145 @@ export async function getDetailedFix(findingCode, deviceIp, scanId, language = "
   return r.json();
 }
 
+export async function getDeviceNames() {
+  if (USE_MOCK) {
+    await sleep(100);
+    return {
+      "192.168.1.1": { custom_name: "Routerul WiFi", suggested_name: "Router TP-Link" },
+      "192.168.1.40": { custom_name: "Camera din sufragerie", suggested_name: "Camera IP Hikvision" },
+    };
+  }
+  const r = await fetch("/api/device-names");
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function saveDeviceName(ip, customName, suggestedName) {
+  if (USE_MOCK) {
+    await sleep(100);
+    return { ok: true };
+  }
+  const r = await fetch("/api/device-names", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ ip, custom_name: customName, suggested_name: suggestedName }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function suggestDeviceNames(scanId, language = "ro") {
+  if (USE_MOCK) {
+    await sleep(200);
+    return {
+      "192.168.1.1": "Router TP-Link",
+      "192.168.1.40": "Camera IP Hikvision",
+      "192.168.1.100": "Calculator",
+      "192.168.1.50": "Dispozitiv necunoscut",
+    };
+  }
+  const r = await fetch(`/api/device-names/suggest/${encodeURIComponent(scanId)}?language=${language}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function narrateDiff(oldScanId, newScanId, language = "ro") {
+  if (USE_MOCK) {
+    await sleep(300);
+    return {
+      narrative: language === "en"
+        ? "Security score improved from 35 to 55 (+20 points).\n\n1 resolved issue:\n  - CAMERA_STREAM_EXPOSED on 192.168.1.40 (port 554)\n\n1 new device: 192.168.1.50"
+        : "Scorul de securitate a crescut de la 35 la 55 (+20 puncte).\n\n1 problema rezolvata:\n  - CAMERA_STREAM_EXPOSED pe 192.168.1.40 (port 554)\n\n1 dispozitiv nou: 192.168.1.50",
+      old_score: 35, new_score: 55,
+      resolved_count: 1, new_count: 0,
+      devices_added_count: 1, devices_removed_count: 0,
+    };
+  }
+  const r = await fetch(`/api/assistant/narrate-diff/${encodeURIComponent(oldScanId)}/${encodeURIComponent(newScanId)}?language=${language}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function narrateDiffVsPrevious(scanId, language = "ro") {
+  if (USE_MOCK) {
+    await sleep(300);
+    return {
+      narrative: language === "en"
+        ? "Security score improved from 35 to 55 (+20 points).\n\n1 resolved issue:\n  - CAMERA_STREAM_EXPOSED on 192.168.1.40 (port 554)"
+        : "Scorul de securitate a crescut de la 35 la 55 (+20 puncte).\n\n1 problema rezolvata:\n  - CAMERA_STREAM_EXPOSED pe 192.168.1.40 (port 554)",
+      old_score: 35, new_score: 55,
+      resolved_count: 1, new_count: 0,
+      devices_added_count: 0, devices_removed_count: 0,
+    };
+  }
+  const r = await fetch(`/api/assistant/narrate-diff-latest/${encodeURIComponent(scanId)}?language=${language}`);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export function getReportPdfUrl(scanId, language = "ro") {
+  if (scanId) return `/api/report/pdf/${encodeURIComponent(scanId)}?language=${language}`;
+  return `/api/report/pdf?language=${language}`;
+}
+
+export async function getAISettings() {
+  if (USE_MOCK) {
+    await sleep(100);
+    return { provider: "local", has_groq_key: false };
+  }
+  const r = await fetch("/api/settings/ai");
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function updateAISettings(provider, groqApiKey) {
+  if (USE_MOCK) {
+    await sleep(100);
+    return { provider, has_groq_key: !!groqApiKey };
+  }
+  const body = { provider };
+  if (groqApiKey !== undefined) body.groq_api_key = groqApiKey;
+  const r = await fetch("/api/settings/ai", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function getFixInfo(findingCode, ip, port, language = "ro", gateway) {
+  if (USE_MOCK) {
+    await sleep(200);
+    const mockCommands = {
+      TELNET_OPEN: { fix_type: "powershell", command: "Disable-WindowsOptionalFeature -Online -FeatureName TelnetClient -NoRestart", explanation: "Disables the Telnet component from Windows.", requires_admin: true },
+      CAMERA_STREAM_EXPOSED: { fix_type: "portal", portal_url: `http://${ip}`, explanation: "Opens the camera panel. Disable open RTSP or set a password.", requires_admin: false },
+    };
+    return mockCommands[findingCode] || { fix_type: "powershell", command: `New-NetFirewallRule -DisplayName 'Block port ${port}' -Direction Inbound -Action Block -Protocol TCP -LocalPort ${port}`, explanation: `Blocks port ${port}`, requires_admin: true };
+  }
+  const r = await fetch("/api/fix/info", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ finding_code: findingCode, ip, port, language, gateway }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function executeFix(findingCode, ip, port, language = "ro", gateway) {
+  if (USE_MOCK) {
+    await sleep(1000);
+    return { status: "success", stdout: "Command executed successfully.", command: "mock-command" };
+  }
+  const r = await fetch("/api/fix/execute", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ finding_code: findingCode, ip, port, language, gateway }),
+  });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
 export async function narrateScan(scanId, language = "ro") {
   if (USE_MOCK) {
     await sleep(300);

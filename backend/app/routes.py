@@ -7,6 +7,7 @@ from typing import Literal
 
 import aiofiles
 from fastapi import APIRouter, HTTPException, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
 
 from analyzer import export
@@ -14,8 +15,10 @@ from analyzer.models import ScanResult
 from analyzer.parser import MAX_FILE_BYTES
 from analyzer.service import analyze_file, analyze_folder, to_dict
 
-from ai.assistant import Assistant, enrich_scan_data, narrate_scan, suggest_followups
-from ai.fingerprint import guess_device_type
+from ai.assistant import Assistant, enrich_scan_data, narrate_scan, suggest_followups, narrate_diff
+from ai.fingerprint import guess_device_type, suggest_device_name
+from ai.pdf_report import generate_report
+from ai.fix_commands import get_fix_command, FIX_COMMANDS
 
 from . import database as db
 from .guardrails import build_allowlist, detect_network, validate_scan_target
@@ -308,7 +311,7 @@ def _get_assistant(scan_id: int) -> Assistant:
     data = db.get_snapshot(scan_id)
     if data is None:
         raise HTTPException(404, "Scan not found or has no snapshot.")
-    assistant = Assistant(data, enable_cloud=False, enable_local=True)
+    assistant = Assistant(data, enable_cloud=False, enable_local=True, groq_api_key=_ai_settings.get("groq_api_key"))
     _assistants[scan_id] = assistant
     if len(_assistants) > 20:
         oldest = next(iter(_assistants))
@@ -414,3 +417,178 @@ def assistant_narrate_latest(language: str = "ro"):
     if data is None:
         raise HTTPException(404, "Latest scan has no snapshot.")
     return narrate_scan(data, language)
+
+
+# ── Scan Diff Narration ───────────────────────────────────────────────
+
+@router.get("/assistant/narrate-diff/{old_scan_id}/{new_scan_id}")
+def assistant_narrate_diff(old_scan_id: int, new_scan_id: int, language: str = "ro"):
+    """Generate a narrative comparing two scans."""
+    old, new = db.get_scan(old_scan_id), db.get_scan(new_scan_id)
+    if not old:
+        raise HTTPException(404, f"Scan {old_scan_id} not found.")
+    if not new:
+        raise HTTPException(404, f"Scan {new_scan_id} not found.")
+    diff_data = db.get_diff(old_scan_id, new_scan_id)
+    return narrate_diff(diff_data, language)
+
+
+@router.get("/assistant/narrate-diff-latest/{scan_id}")
+def assistant_narrate_diff_vs_previous(scan_id: int, language: str = "ro"):
+    """Compare a scan with the most recent previous scan of the same source."""
+    scan = db.get_scan(scan_id)
+    if not scan:
+        raise HTTPException(404, "Scan not found.")
+    all_scans = db.get_all_scans(scan["source"])
+    prev = None
+    for s in all_scans:
+        if s["id"] < scan_id:
+            prev = s
+            break
+    if not prev:
+        raise HTTPException(404, "No previous scan to compare against.")
+    diff_data = db.get_diff(prev["id"], scan_id)
+    return narrate_diff(diff_data, language)
+
+
+# ── Device Naming ─────────────────────────────────────────────────────
+
+class DeviceNameRequest(BaseModel):
+    ip: str
+    custom_name: str
+    suggested_name: str | None = None
+
+
+@router.get("/device-names")
+def get_device_names():
+    """Get all custom device names."""
+    return db.get_device_names()
+
+
+@router.put("/device-names")
+def save_device_name(req: DeviceNameRequest):
+    """Save a custom name for a device (e.g. 'Telefonul lui Andrei')."""
+    db.save_device_name(req.ip, req.custom_name, req.suggested_name)
+    return {"ok": True, "ip": req.ip, "custom_name": req.custom_name}
+
+
+@router.get("/device-names/suggest/{scan_id}")
+def suggest_device_names(scan_id: int, language: str = "ro"):
+    """Auto-suggest friendly names for all devices in a scan."""
+    data = db.get_snapshot(scan_id)
+    if data is None:
+        raise HTTPException(404, "Scan not found or has no snapshot.")
+    suggestions = {}
+    for device in data.get("devices", []):
+        ip = device.get("ip", "")
+        if ip:
+            suggestions[ip] = suggest_device_name(device, language)
+    return suggestions
+
+
+# ── PDF Report ────────────────────────────────────────────────────────
+
+@router.get("/report/pdf/{scan_id}")
+def download_pdf_report(scan_id: int, language: str = "ro"):
+    """Generate and download a PDF report for a scan."""
+    data = db.get_snapshot(scan_id)
+    if data is None:
+        raise HTTPException(404, "Scan not found or has no snapshot.")
+    scan = db.get_scan(scan_id)
+    if scan:
+        data["timestamp"] = scan["timestamp"]
+    pdf_bytes = generate_report(data, language)
+    filename = f"network_report_{scan_id}.pdf"
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/report/pdf")
+def download_pdf_report_latest(language: str = "ro"):
+    """Generate PDF report for the latest scan."""
+    scans = db.get_all_scans(None)
+    if not scans:
+        raise HTTPException(404, "No scans available.")
+    return download_pdf_report(scans[0]["id"], language)
+
+
+# ── AI Settings ───────────────────────────────────────────────────────
+
+class AISettingsRequest(BaseModel):
+    provider: str = "local"
+    groq_api_key: str | None = None
+
+_ai_settings: dict = {"provider": "local", "groq_api_key": None}
+
+
+@router.get("/settings/ai")
+def get_ai_settings():
+    return {"provider": _ai_settings["provider"], "has_groq_key": bool(_ai_settings.get("groq_api_key"))}
+
+
+@router.put("/settings/ai")
+def update_ai_settings(req: AISettingsRequest):
+    _ai_settings["provider"] = req.provider
+    if req.groq_api_key is not None:
+        _ai_settings["groq_api_key"] = req.groq_api_key
+    _assistants.clear()
+    return {"provider": _ai_settings["provider"], "has_groq_key": bool(_ai_settings.get("groq_api_key"))}
+
+
+# ── Fix Commands & Magic Portal ───────────────────────────────────────
+
+class FixRequest(BaseModel):
+    finding_code: str
+    ip: str
+    port: int | None = None
+    gateway: str | None = None
+    language: str = "ro"
+
+
+@router.post("/fix/info")
+def get_fix_info(req: FixRequest):
+    """Get the fix command/portal info for a finding (without executing)."""
+    params = {"ip": req.ip, "port": str(req.port or 0), "gateway": req.gateway or "192.168.1.1"}
+    result = get_fix_command(req.finding_code, params, req.language)
+    if not result:
+        raise HTTPException(404, f"No fix template for {req.finding_code}")
+    return result
+
+
+@router.post("/fix/execute")
+def execute_fix(req: FixRequest):
+    """Execute a fix command on the local machine. Requires admin for most."""
+    import subprocess
+
+    params = {"ip": req.ip, "port": str(req.port or 0), "gateway": req.gateway or "192.168.1.1"}
+    fix = get_fix_command(req.finding_code, params, req.language)
+    if not fix:
+        raise HTTPException(404, f"No fix template for {req.finding_code}")
+
+    if fix["fix_type"] == "portal":
+        return {"status": "portal", "portal_url": fix.get("portal_url", ""), "message": fix["explanation"]}
+
+    cmd = fix.get("command", "")
+    if not cmd:
+        raise HTTPException(400, "No command to execute.")
+
+    try:
+        result = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
+            capture_output=True, text=True, timeout=30,
+        )
+        return {
+            "status": "success" if result.returncode == 0 else "error",
+            "return_code": result.returncode,
+            "stdout": result.stdout[:2000],
+            "stderr": result.stderr[:2000],
+            "command": cmd,
+            "explanation": fix["explanation"],
+        }
+    except subprocess.TimeoutExpired:
+        return {"status": "timeout", "command": cmd, "message": "Command timed out after 30 seconds."}
+    except Exception as e:
+        return {"status": "error", "command": cmd, "message": str(e)}
