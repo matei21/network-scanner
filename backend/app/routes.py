@@ -558,11 +558,24 @@ def get_fix_info(req: FixRequest):
     return result
 
 
+_MANUAL_FIX_MESSAGE = {
+    "ro": ("Din motive de siguranta, aplicatia nu ruleaza comenzi pe calculatorul tau. "
+           "Copiaza comanda si ruleaz-o tu, in PowerShell ca administrator, pe dispozitivul {ip}."),
+    "en": ("For your safety, the app never runs commands on your computer. "
+           "Copy the command and run it yourself, in PowerShell as administrator, on the device {ip}."),
+}
+
+
 @router.post("/fix/execute")
 def execute_fix(req: FixRequest):
-    """Execute a fix command on the local machine. Requires admin for most."""
-    import subprocess
+    """Show-only: never runs anything (security fix).
 
+    Running admin PowerShell from a web API let any caller change this laptop's
+    system settings, and the commands acted on this laptop even when the finding
+    was on another device. The brief asks for steps a person follows (FR-08) and
+    admin rights only for the live scan (NFR-04), so the command is returned for
+    the user to run themselves on the right device.
+    """
     params = {"ip": req.ip, "port": str(req.port or 0), "gateway": req.gateway or "192.168.1.1"}
     fix = get_fix_command(req.finding_code, params, req.language)
     if not fix:
@@ -571,24 +584,12 @@ def execute_fix(req: FixRequest):
     if fix["fix_type"] == "portal":
         return {"status": "portal", "portal_url": fix.get("portal_url", ""), "message": fix["explanation"]}
 
-    cmd = fix.get("command", "")
-    if not cmd:
-        raise HTTPException(400, "No command to execute.")
-
-    try:
-        result = subprocess.run(
-            ["powershell", "-NoProfile", "-NonInteractive", "-Command", cmd],
-            capture_output=True, text=True, timeout=30,
-        )
-        return {
-            "status": "success" if result.returncode == 0 else "error",
-            "return_code": result.returncode,
-            "stdout": result.stdout[:2000],
-            "stderr": result.stderr[:2000],
-            "command": cmd,
-            "explanation": fix["explanation"],
-        }
-    except subprocess.TimeoutExpired:
-        return {"status": "timeout", "command": cmd, "message": "Command timed out after 30 seconds."}
-    except Exception as e:
-        return {"status": "error", "command": cmd, "message": str(e)}
+    lang = "ro" if req.language == "ro" else "en"
+    return {
+        "status": "manual",
+        "executed": False,
+        "command": fix.get("command", ""),
+        "requires_admin": fix.get("requires_admin", False),
+        "explanation": fix["explanation"],
+        "message": _MANUAL_FIX_MESSAGE[lang].format(ip=req.ip),
+    }
