@@ -81,8 +81,8 @@ function AppInner() {
   ];
 
   return (
-    <div className="min-h-full flex flex-col relative" lang={lang}>
-      <VideoBackground />
+    <div className="min-h-full flex flex-col relative" lang={lang} data-mode={expert ? "expert" : "simple"}>
+      <VideoBackground expert={expert} />
       <Header
         expert={expert}
         onToggleExpert={() => setExpert((v) => !v)}
