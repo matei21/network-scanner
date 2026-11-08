@@ -132,7 +132,7 @@ function AppInner() {
         )}
 
         {tab === "findings" && (
-          <FindingsList scan={scan} expert={expert} />
+          <FindingsList scan={scan} expert={expert} onScanUpdated={setScan} />
         )}
 
         {tab === "history" && (

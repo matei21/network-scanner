@@ -68,6 +68,48 @@ def run_nmap_scan(target: str, output_path: str, timeout: int = SCAN_TIMEOUT) ->
         return {"success": False, "error": NMAP_NOT_FOUND}
 
 
+# --- fix verification: re-check ONE port on ONE device ---------------------------------
+
+VERIFY_TIMEOUT = 90
+
+
+def build_verify_command(ip: str, port: int, udp: bool, output: Path, connect: bool = False) -> list[str]:
+    scan_type = "-sU" if udp else ("-sT" if connect else "-sS")
+    return [
+        find_nmap() or "nmap",
+        scan_type, "-sV", "-Pn",           # -Pn: we know the host, skip discovery
+        "--script", "http-title",          # HTTP_ADMIN_CLEARTEXT depends on the page title
+        "-p", f"{'U' if udp else 'T'}:{int(port)}",
+        "--max-rate", "100",
+        "-oX", str(output),
+        ip,
+    ]
+
+
+def run_verify_scan(ip: str, port: int, udp: bool, output_path: Path) -> dict:
+    """Scan a single port. TCP falls back to a connect scan (-sT), which needs no admin rights;
+    UDP has no unprivileged alternative."""
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    last = ""
+    for connect in ([False] if udp else [False, True]):
+        try:
+            r = subprocess.run(build_verify_command(ip, port, udp, output, connect),
+                               capture_output=True, text=True, timeout=VERIFY_TIMEOUT)
+        except subprocess.TimeoutExpired:
+            return {"success": False, "error": f"timed out after {VERIFY_TIMEOUT}s"}
+        except FileNotFoundError:
+            return {"success": False, "error": NMAP_NOT_FOUND}
+        if r.returncode == 0 and output.exists():
+            return {"success": True, "method": "-sU" if udp else ("-sT" if connect else "-sS")}
+        last = (r.stderr or r.stdout or "").strip()[-300:]
+    return {"success": False, "error": last or "nmap returned an error", "needs_admin": udp}
+
+
+def scan_running() -> bool:
+    return any(j.status == "running" for j in _jobs.values())
+
+
 # --- background scan with progress and cancel (the UI scan button) -----------------
 
 # nmap --stats-every prints e.g. "SYN Stealth Scan Timing: About 45.20% done; ETC: 03:12 (0:01:02 remaining)"

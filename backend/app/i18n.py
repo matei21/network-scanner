@@ -73,6 +73,17 @@ MESSAGES: dict[str, tuple[str, str]] = {
     "fix_launch_failed": ("Windows could not start PowerShell (code {rc}).", "Windows nu a putut porni PowerShell (cod {rc})."),
     "fix_closed_early": ("No result: the PowerShell window was closed before finishing.",
                          "Niciun rezultat: fereastra PowerShell a fost inchisa inainte sa termine."),
+    # fix verification
+    "verify_no_finding": ("This problem is not in that scan.", "Problema nu exista in acel scan."),
+    "verify_no_port": ("This problem has no port to re-check; run a new full scan instead.",
+                       "Problema asta nu are un port de verificat; fa o scanare completa noua."),
+    "verify_udp_admin": ("Re-checking a UDP port needs administrator rights: start the backend as administrator, or run a new full scan.",
+                         "Verificarea unui port UDP are nevoie de drepturi de administrator: porneste aplicatia ca administrator sau fa o scanare completa noua."),
+    "verify_failed": ("The re-check scan failed: {detail}", "Scanarea de verificare a esuat: {detail}"),
+    "verify_fixed": ("Fixed: port {port} on {ip} no longer shows this problem. Score {old} -> {new}. Saved in history.",
+                     "Rezolvat: portul {port} de pe {ip} nu mai are aceasta problema. Scor {old} -> {new}. Salvat in istoric."),
+    "verify_still_open": ("Not fixed yet: port {port} on {ip} still shows this problem. Score stays {old}. Saved in history.",
+                          "Inca nerezolvat: portul {port} de pe {ip} are in continuare aceasta problema. Scorul ramane {old}. Salvat in istoric."),
     # settings
     "provider_invalid": ("provider must be 'local' or 'groq'", "furnizorul trebuie sa fie 'local' sau 'groq'"),
 }

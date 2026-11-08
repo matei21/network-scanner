@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { flattenFindings, sortedBySeverity, severityColorClasses } from "../lib/findings";
-import { getFixInfo, executeFix, getFixResult, getDetailedFix } from "../lib/api";
+import { getFixInfo, executeFix, getFixResult, getDetailedFix, verifyFix } from "../lib/api";
 import DeviceIcon from "./DeviceIcon";
 import SpeakButton from "./SpeakButton";
-import { ChevronDown, ChevronUp, Flame, AlertOctagon, Terminal, ExternalLink, CheckCircle2, Loader2, XCircle, ShieldCheck, Search, Monitor, Router, Copy, Check } from "lucide-react";
+import { ChevronDown, ChevronUp, Flame, AlertOctagon, Terminal, ExternalLink, CheckCircle2, Loader2, XCircle, ShieldCheck, Search, Monitor, Router, Copy, Check, RefreshCw } from "lucide-react";
 
 function SeverityBadge({ severity }) {
   const { t } = useLanguage();
@@ -43,6 +43,14 @@ const FIX_TEXT = {
     output: "Rezultat",
     sources: "Surse",
     webNote: "Pasi gasiti pe internet, NU in scanul tau. Verifica sursele.",
+    verify: "Verifica daca s-a rezolvat",
+    verifyAsk: (ip, port) => `Scanez din nou doar portul ${port} de pe ${ip} (cam 15 secunde), apoi salvez rezultatul in istoric. Continui?`,
+    verifyYes: "Da, verifica acum",
+    verifyNo: "Nu",
+    verifying: (ip, port) => `Scanez din nou portul ${port} de pe ${ip}...`,
+    verifyDoneHint: "Dupa ce ai aplicat pasii, verifica:",
+    seeScore: "Vezi scorul nou",
+    retry: "Verifica din nou",
   },
   en: {
     here: "On this computer",
@@ -66,6 +74,14 @@ const FIX_TEXT = {
     output: "Output",
     sources: "Sources",
     webNote: "Steps found on the internet, NOT in your scan. Check the sources.",
+    verify: "Check if it's fixed",
+    verifyAsk: (ip, port) => `I'll re-scan only port ${port} on ${ip} (about 15 seconds) and save the result in history. Continue?`,
+    verifyYes: "Yes, check now",
+    verifyNo: "No",
+    verifying: (ip, port) => `Re-scanning port ${port} on ${ip}...`,
+    verifyDoneHint: "After applying the steps, check:",
+    seeScore: "See the new score",
+    retry: "Check again",
   },
 };
 
@@ -77,13 +93,14 @@ function hostOf(url) {
   }
 }
 
-function FixPanel({ finding, lang, expert, scanId }) {
+function FixPanel({ finding, lang, expert, scanId, onScanUpdated }) {
   const device = finding.device || {};
   const L = FIX_TEXT[lang] || FIX_TEXT.ro;
   const [info, setInfo] = useState(null);
   const [run, setRun] = useState({ state: "idle" });
   const [guide, setGuide] = useState({ state: "idle" });
   const [copied, setCopied] = useState(false);
+  const [verify, setVerify] = useState({ state: "idle" });
 
   useEffect(() => {
     if (!finding.code || !device.ip) return;
@@ -159,6 +176,17 @@ function FixPanel({ finding, lang, expert, scanId }) {
   const isHere = info.target === "this_pc";
   const deviceName = [device.vendor, info.device?.label].filter(Boolean).join(" ") || device.ip;
   const busy = run.state === "asking" || run.state === "running";
+  const canVerify = finding.port != null && !!scanId;
+
+  async function runVerify() {
+    setVerify({ state: "running" });
+    try {
+      const r = await verifyFix(scanId, finding.code, device.ip, finding.port);
+      setVerify({ state: "done", ...r });
+    } catch (e) {
+      setVerify({ state: "error", message: String(e.message || e) });
+    }
+  }
   const guideAgents = (guide.agents || []).filter((a) => expert || a.agent === "advisor");
 
   return (
@@ -223,6 +251,85 @@ function FixPanel({ finding, lang, expert, scanId }) {
           </button>
         )}
       </div>
+
+      {canVerify && (
+        <div className="rounded-md border border-gray-200 p-2.5 space-y-2" aria-live="polite">
+          {verify.state === "idle" && (
+            <div className="flex flex-wrap items-center gap-2">
+              {run.state === "done" && <span className="text-base text-gray-700">{L.verifyDoneHint}</span>}
+              <button
+                type="button"
+                onClick={() => setVerify({ state: "confirm" })}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-base font-semibold ${
+                  run.state === "done" ? "text-white bg-green-700 hover:bg-green-800" : "border border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                <RefreshCw className="w-4 h-4" aria-hidden />
+                {L.verify}
+              </button>
+            </div>
+          )}
+          {verify.state === "confirm" && (
+            <div className="space-y-2">
+              <p className="text-base">{L.verifyAsk(device.ip, finding.port)}</p>
+              <div className="flex gap-2">
+                <button type="button" onClick={runVerify}
+                  className="px-3 py-1.5 rounded-lg text-base font-semibold text-white bg-blue-700 hover:bg-blue-800">
+                  {L.verifyYes}
+                </button>
+                <button type="button" onClick={() => setVerify({ state: "idle" })}
+                  className="px-3 py-1.5 rounded-lg text-base border border-gray-300 hover:bg-gray-50">
+                  {L.verifyNo}
+                </button>
+              </div>
+            </div>
+          )}
+          {verify.state === "running" && (
+            <p className="flex items-center gap-2 text-base">
+              <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+              {L.verifying(device.ip, finding.port)}
+            </p>
+          )}
+          {verify.state === "done" && (
+            <div className={`rounded-md p-2.5 text-base ${verify.result === "fixed" ? "bg-green-50 text-green-900" : "bg-amber-50 text-amber-900"}`} role="status">
+              <div className="flex items-start gap-2">
+                {verify.result === "fixed"
+                  ? <CheckCircle2 className="w-5 h-5 shrink-0 mt-0.5" aria-hidden />
+                  : <AlertOctagon className="w-5 h-5 shrink-0 mt-0.5" aria-hidden />}
+                <span>{verify.message}</span>
+              </div>
+              {verify.result === "fixed" && verify.old_score != null && (
+                <p className="mt-1.5 font-bold tabular-nums">
+                  {verify.old_score} → {verify.new_score} (+{verify.new_score - verify.old_score})
+                </p>
+              )}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {verify.result === "fixed" && onScanUpdated && (
+                  <button type="button" onClick={() => onScanUpdated(verify.scan)}
+                    className="px-3 py-1.5 rounded-lg text-base font-semibold text-white bg-green-700 hover:bg-green-800">
+                    {L.seeScore}
+                  </button>
+                )}
+                {verify.result !== "fixed" && (
+                  <button type="button" onClick={() => setVerify({ state: "confirm" })}
+                    className="px-3 py-1.5 rounded-lg text-base border border-gray-300 hover:bg-gray-50">
+                    {L.retry}
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+          {verify.state === "error" && (
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="text-base text-red-700 flex-1 min-w-0" style={{ overflowWrap: "anywhere" }}>{verify.message}</p>
+              <button type="button" onClick={() => setVerify({ state: "confirm" })}
+                className="px-3 py-1.5 rounded-lg text-base border border-gray-300 hover:bg-gray-50">
+                {L.retry}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
 
       {run.state !== "idle" && (
         <div
@@ -315,7 +422,7 @@ function FixPanel({ finding, lang, expert, scanId }) {
   );
 }
 
-function FindingItem({ finding, lang, expert, isTop, scanId }) {
+function FindingItem({ finding, lang, expert, isTop, scanId, onScanUpdated }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(isTop);
   const theme = severityColorClasses(finding.severity);
@@ -421,12 +528,12 @@ function FindingItem({ finding, lang, expert, isTop, scanId }) {
         </>
       )}
 
-      <FixPanel finding={finding} lang={lang} expert={expert} scanId={scanId} />
+      <FixPanel finding={finding} lang={lang} expert={expert} scanId={scanId} onScanUpdated={onScanUpdated} />
     </article>
   );
 }
 
-export default function FindingsList({ scan, expert }) {
+export default function FindingsList({ scan, expert, onScanUpdated }) {
   const { lang, t } = useLanguage();
   const sorted = sortedBySeverity(flattenFindings(scan));
   if (sorted.length === 0) {
@@ -446,6 +553,7 @@ export default function FindingsList({ scan, expert }) {
           expert={expert}
           isTop={i === 0}
           scanId={scan?.scan_id}
+          onScanUpdated={onScanUpdated}
         />
       ))}
     </div>

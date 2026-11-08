@@ -1,3 +1,4 @@
+import copy
 import logging
 import shutil
 import uuid
@@ -31,7 +32,7 @@ from .models import (
     ScanHistoryItem,
     ScanRequest,
 )
-from .scanner import get_scan_job, run_nmap_scan, start_scan_job
+from .scanner import get_scan_job, run_nmap_scan, run_verify_scan, scan_running, start_scan_job
 from .self_firewall import mark_firewalled_ports
 
 logger = logging.getLogger(__name__)
@@ -798,3 +799,114 @@ def fix_result(run_id: str):
     if result.get("code"):
         result["output"] = t(result["code"])
     return result
+
+
+# ── Fix -> verify loop ────────────────────────────────────────────────
+#
+# After a fix, re-scan just that port on that device (same guardrail as any live scan), apply the
+# normal detection rules to the fresh result, and store a new history entry: the previous scan with
+# that one port replaced. The history diff then shows the resolved finding and the score change
+# ("Proof" in the brief); the snapshot records that only one port was re-checked.
+
+class VerifyRequest(BaseModel):
+    scan_id: int
+    finding_code: str
+    ip: str
+    port: int | None = None
+    confirm: bool = False
+
+
+def _store_snapshot(data: dict, display_name: str, xml_path: Path, source: str) -> int:
+    """Save an already-analyzed scan dict as a new history entry (same tables as _store)."""
+    scan_id = db.save_scan(display_name, data["score"], str(xml_path), source)
+    db.save_devices(scan_id, [
+        {"ip": d["ip"], "mac_masked": d.get("mac"), "vendor": d.get("vendor"), "hostname": d.get("hostname"),
+         "device_type": d.get("type")}
+        for d in data["devices"]
+    ])
+    db.save_findings(scan_id, [
+        {"ip": d["ip"], "port": f.get("port"), "finding_code": f["code"], "severity": f["severity"]}
+        for d in data["devices"] for f in d.get("findings", [])
+    ])
+    db.save_ports(scan_id, [{"ip": d["ip"], **p} for d in data["devices"] for p in d.get("open_ports", [])])
+    data["scan_id"] = scan_id
+    db.save_snapshot(scan_id, data)
+    return scan_id
+
+
+@router.post("/fix/verify")
+def verify_fix(req: VerifyRequest):
+    base = db.get_scan(req.scan_id)
+    data = db.get_snapshot(req.scan_id)
+    if not base or data is None:
+        raise HTTPException(404, t("scan_not_found"))
+
+    device = _find_device(data, req.ip)
+    finding = next((f for f in (device or {}).get("findings", [])
+                    if f.get("code") == req.finding_code and f.get("port") == req.port), None)
+    if not finding:
+        raise HTTPException(404, t("verify_no_finding"))
+    if finding.get("port") is None:
+        raise HTTPException(400, t("verify_no_port"))
+
+    port = int(finding["port"])
+    proto = finding.get("protocol") or ("udp" if req.finding_code in ("UPNP_EXPOSED", "SNMP_EXPOSED") else "tcp")
+    check = _live_check(req.ip, req.confirm)
+    if not check["allowed"]:
+        raise HTTPException(403, check["reason"])
+    if scan_running():
+        raise HTTPException(409, t("scan_running"))
+
+    xml_path = _new_scan_dir() / "verify_scan.xml"
+    run = run_verify_scan(check["target"], port, proto == "udp", xml_path)
+    if not run["success"]:
+        if run.get("needs_admin"):
+            raise HTTPException(500, t("verify_udp_admin"))
+        raise HTTPException(500, t("verify_failed", detail=run.get("error", "")))
+    # Scanning this laptop itself bypasses Windows Firewall: show blocked ports as the network sees them.
+    _apply_own_firewall(xml_path)
+    fresh = analyze_file(xml_path)
+    if fresh.error:
+        raise HTTPException(500, t("nmap_unreadable", detail=fresh.error))
+
+    checked_dev = _find_device(enrich_scan_data(to_dict(fresh)), req.ip) or {"open_ports": [], "findings": []}
+
+    def on_port(item: dict) -> bool:
+        return item.get("port") == port and (item.get("protocol") or "tcp") == proto
+
+    merged = copy.deepcopy(data)
+    for key in ("scan_id", "history", "changes", "timestamp", "verification"):
+        merged.pop(key, None)
+    target_dev = _find_device(merged, req.ip)
+    # Every rule on that port is re-evaluated (e.g. FTP_CLEARTEXT and OUTDATED_SERVICE share port 21).
+    target_dev["open_ports"] = ([p for p in target_dev.get("open_ports", []) if not on_port(p)]
+                                + [p for p in checked_dev.get("open_ports", []) if on_port(p)])
+    target_dev["findings"] = ([f for f in target_dev.get("findings", []) if not on_port(f)]
+                              + [f for f in checked_dev.get("findings", []) if on_port(f)])
+
+    old_score = data.get("score")
+    points = sum(f.get("points", 0) for d in merged["devices"] for f in d.get("findings", []))
+    merged["score"] = max(0, 100 - points)
+    merged["custom_risk_score"] = custom_risk_score(merged)
+    still_there = any(f.get("code") == req.finding_code for f in target_dev["findings"] if on_port(f))
+    merged["verification"] = {
+        "base_scan_id": req.scan_id, "finding_code": req.finding_code, "ip": req.ip, "port": port,
+        "protocol": proto, "result": "still_open" if still_there else "fixed", "method": run.get("method"),
+        "checked": "single_port",
+    }
+    display = f"verify_{req.finding_code}_{req.ip}_{port}"
+    merged["file"] = display
+    merged["source"] = base["source"]
+
+    new_id = _store_snapshot(merged, display, xml_path, base["source"])
+    merged["history"] = _score_history(base["source"])
+    merged["changes"] = _changes_since_previous(new_id, base["source"], merged["score"])
+    key = "verify_still_open" if still_there else "verify_fixed"
+    return {
+        "result": "still_open" if still_there else "fixed",
+        "old_score": old_score,
+        "new_score": merged["score"],
+        "new_scan_id": new_id,
+        "message": t(key, port=port, ip=req.ip, old=old_score, new=merged["score"]),
+        "scan": merged,
+    }

@@ -333,6 +333,17 @@ export async function executeFix(findingCode, ip, port, language = "ro", scanId)
   return r.json();
 }
 
+// Re-check one port after a fix; the backend saves the result as a new history entry.
+export async function verifyFix(scanId, findingCode, ip, port) {
+  const r = await apiFetch("/api/fix/verify", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ scan_id: scanId, finding_code: findingCode, ip, port, confirm: true }),
+  });
+  if (!r.ok) throw await httpError(r);
+  return r.json();
+}
+
 export async function getFixResult(runId) {
   const r = await apiFetch(`/api/fix/result/${encodeURIComponent(runId)}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
