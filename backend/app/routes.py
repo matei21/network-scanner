@@ -220,6 +220,13 @@ def live_scan(req: ScanRequest):
     return _store(result, f"live_{req.target}", xml_path, "real")
 
 
+def _new_batch_dir() -> Path:
+    """results/batch_<date_time>_<id>/ : a new folder for every /batch call."""
+    path = RESULTS_DIR / f"batch_{datetime.now():%Y%m%d_%H%M%S}_{uuid.uuid4().hex[:6]}"
+    path.mkdir(parents=True, exist_ok=False)
+    return path
+
+
 @router.post("/batch")
 async def batch_process(files: list[UploadFile], source: Source = "test"):
     folder = _new_scan_dir()
@@ -231,14 +238,19 @@ async def batch_process(files: list[UploadFile], source: Source = "test"):
     for r in results:
         _store(r, r.file, folder / r.file, source)
 
-    findings_csv = RESULTS_DIR / "findings.csv"
-    scores_csv = RESULTS_DIR / "scores.csv"
+    # Each batch gets its own folder, so the API can never overwrite
+    # results/findings.csv and results/scores.csv, the files made with
+    # "python -m analyzer <folder> --out results/" for the Test Set upload.
+    out_dir = _new_batch_dir()
+    findings_csv = out_dir / "findings.csv"
+    scores_csv = out_dir / "scores.csv"
     export.write_findings_csv(results, findings_csv)
     export.write_scores_csv(results, scores_csv)
 
     return {
         "processed": len(results),
         "errors": [{"file": r.file, "error": r.error} for r in results if r.error],
+        "output_folder": str(out_dir),
         "findings_csv_path": str(findings_csv),
         "scores_csv_path": str(scores_csv),
         "findings_csv": findings_csv.read_text(encoding="utf-8"),
