@@ -166,6 +166,14 @@ def get_all_scans(source: str | None = None) -> list[dict]:
     return [_scan_row(r) for r in rows]
 
 
+def count_findings() -> dict[int, int]:
+    """scan_id -> number of findings, for every scan that has at least one."""
+    conn = _connect()
+    rows = conn.execute("SELECT scan_id, COUNT(*) AS n FROM findings GROUP BY scan_id").fetchall()
+    conn.close()
+    return {r["scan_id"]: r["n"] for r in rows}
+
+
 def get_findings(scan_id: int) -> list[dict]:
     conn = _connect()
     rows = conn.execute("SELECT * FROM findings WHERE scan_id = ?", (scan_id,)).fetchall()

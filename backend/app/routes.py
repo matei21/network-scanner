@@ -1,6 +1,7 @@
 import logging
 import shutil
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Literal
 
@@ -65,7 +66,8 @@ async def _save_upload(file: UploadFile, folder: Path) -> Path:
 
 def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source) -> dict:
     data = to_dict(result)
-    data = enrich_scan_data(data)
+    if result.ok:
+        data = enrich_scan_data(data)
     data["source"] = source
     scan_id = db.save_scan(display_name, result.score, str(xml_path), source)
     db.save_devices(scan_id, [
@@ -88,10 +90,25 @@ def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source
     return data
 
 
+def _local_date(timestamp: str) -> str:
+    """'2026-11-07T18:07:01+00:00' -> '2026-11-07 20:07' in the laptop's time zone."""
+    return datetime.fromisoformat(timestamp).astimezone().strftime("%Y-%m-%d %H:%M")
+
+
 def _score_history(source: str) -> list[dict]:
     """Score trend, oldest first (FR-10). Only scans of the same source, so test files never mix with our network."""
+    counts = db.count_findings()
     return [
-        {"scan_id": s["id"], "file": s["filename"], "timestamp": s["timestamp"], "score": s["network_score"]}
+        {
+            "scan_id": s["id"],
+            "file": s["filename"],
+            "timestamp": s["timestamp"],
+            "date": _local_date(s["timestamp"]),
+            "score": s["network_score"],
+            "findings_count": counts.get(s["id"], 0),
+            # A file that could not be read is stored without a score (shown as ERROR, like scores.csv).
+            "status": "error" if s["network_score"] is None else "ok",
+        }
         for s in reversed(db.get_all_scans(source))
     ]
 
@@ -99,9 +116,9 @@ def _score_history(source: str) -> list[dict]:
 @router.post("/upload")
 async def upload_xml(file: UploadFile, source: Source = "real"):
     xml_path = await _save_upload(file, _new_scan_dir())
+    # An unreadable file is a normal result, not a server error: the contract answers
+    # status="error" + a clear message, and it is kept in history like in a batch.
     result = analyze_file(xml_path)
-    if result.error:
-        raise HTTPException(422, f"Could not read {result.file}: {result.error}")
     return _store(result, result.file, xml_path, source)
 
 
@@ -111,7 +128,8 @@ def get_latest_scan():
     scans = db.get_all_scans(None)
     if not scans:
         raise HTTPException(404, "No scans yet. Upload an XML file or run a live scan.")
-    latest = scans[0]
+    # Prefer the newest readable scan, so a broken file from a batch is not what the UI opens on.
+    latest = next((s for s in scans if s["network_score"] is not None), scans[0])
     data = db.get_snapshot(latest["id"])
     if data is None:
         raise HTTPException(404, "Latest scan has no stored snapshot.")
@@ -206,9 +224,9 @@ async def batch_process(files: list[UploadFile], source: Source = "test"):
         await _save_upload(file, folder)
 
     results = analyze_folder(folder)
+    # Unreadable files are stored too, so the UI shows the same ERROR rows as scores.csv.
     for r in results:
-        if r.ok:
-            _store(r, r.file, folder / r.file, source)
+        _store(r, r.file, folder / r.file, source)
 
     findings_csv = RESULTS_DIR / "findings.csv"
     scores_csv = RESULTS_DIR / "scores.csv"
