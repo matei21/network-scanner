@@ -21,3 +21,18 @@ def test_history_has_the_fields_the_ui_reads(monkeypatch, tmp_path):
     assert [h["findings_count"] for h in history] == [2, 0]
     assert [h["score"] for h in history] == [0, 100]
     assert all(len(h["date"]) == len("2026-11-07 20:07") for h in history)
+    assert [h["status"] for h in history] == ["ok", "ok"]
+
+
+def test_unreadable_file_is_listed_as_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DB_PATH", str(tmp_path / "test.db"))
+    db.init_db()
+    db.save_scan("V1_home_basic.xml", 90, None, "test")
+    db.save_scan("V7_broken.xml", None, None, "test")
+
+    history = routes._score_history("test")
+
+    assert [(h["file"], h["score"], h["status"]) for h in history] == [
+        ("V1_home_basic.xml", 90, "ok"),
+        ("V7_broken.xml", None, "error"),
+    ]

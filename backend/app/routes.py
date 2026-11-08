@@ -66,7 +66,8 @@ async def _save_upload(file: UploadFile, folder: Path) -> Path:
 
 def _store(result: ScanResult, display_name: str, xml_path: Path, source: Source) -> dict:
     data = to_dict(result)
-    data = enrich_scan_data(data)
+    if result.ok:
+        data = enrich_scan_data(data)
     data["source"] = source
     scan_id = db.save_scan(display_name, result.score, str(xml_path), source)
     db.save_devices(scan_id, [
@@ -105,6 +106,8 @@ def _score_history(source: str) -> list[dict]:
             "date": _local_date(s["timestamp"]),
             "score": s["network_score"],
             "findings_count": counts.get(s["id"], 0),
+            # A file that could not be read is stored without a score (shown as ERROR, like scores.csv).
+            "status": "error" if s["network_score"] is None else "ok",
         }
         for s in reversed(db.get_all_scans(source))
     ]
@@ -125,7 +128,8 @@ def get_latest_scan():
     scans = db.get_all_scans(None)
     if not scans:
         raise HTTPException(404, "No scans yet. Upload an XML file or run a live scan.")
-    latest = scans[0]
+    # Prefer the newest readable scan, so a broken file from a batch is not what the UI opens on.
+    latest = next((s for s in scans if s["network_score"] is not None), scans[0])
     data = db.get_snapshot(latest["id"])
     if data is None:
         raise HTTPException(404, "Latest scan has no stored snapshot.")
@@ -220,9 +224,9 @@ async def batch_process(files: list[UploadFile], source: Source = "test"):
         await _save_upload(file, folder)
 
     results = analyze_folder(folder)
+    # Unreadable files are stored too, so the UI shows the same ERROR rows as scores.csv.
     for r in results:
-        if r.ok:
-            _store(r, r.file, folder / r.file, source)
+        _store(r, r.file, folder / r.file, source)
 
     findings_csv = RESULTS_DIR / "findings.csv"
     scores_csv = RESULTS_DIR / "scores.csv"

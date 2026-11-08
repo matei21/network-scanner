@@ -1,12 +1,12 @@
 import { useLanguage } from "../i18n/LanguageContext";
-import { Trash2 } from "lucide-react";
+import { AlertOctagon, Trash2 } from "lucide-react";
 
 function Sparkline({ points }) {
   // Score trend chart — larger, white-on-green palette (user feedback).
   if (!points || points.length === 0) return null;
   const w = 720;
   const h = 240;
-  const padX = 36;
+  const padX = 60; // room for half a date label at both ends
   const padY = 42;
   const xs = points.map((_, i) =>
     padX + (i * (w - padX * 2)) / Math.max(1, points.length - 1)
@@ -79,28 +79,52 @@ export default function HistoryView({ scan, onDelete }) {
     <div className="space-y-6">
       <section>
         <h3 className="on-video font-semibold mb-2 text-xl">{t("history_score_trend")}</h3>
-        <Sparkline points={history} />
+        <Sparkline points={history.filter((h) => h.status !== "error")} />
       </section>
 
       <section>
         <h3 className="on-video font-semibold mb-2 text-xl">{t("history_title")}</h3>
-        <ul className="divide-y border border-gray-200 rounded-xl bg-white">
-          {history
-            .slice()
-            .reverse()
-            .map((h) => (
-              <li
-                key={h.scan_id}
-                className="p-3 flex items-center justify-between"
-              >
-                <span className="tabular-nums">{h.date}</span>
-                <span className="text-sm text-gray-600">
-                  {h.findings_count} {t("findings_count")}
-                </span>
-                <span className="font-semibold tabular-nums">{h.score}</span>
-              </li>
-            ))}
-        </ul>
+        <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
+          <table className="w-full text-left">
+            <thead className="border-b border-gray-200 text-gray-700">
+              <tr>
+                <th scope="col" className="p-3 font-semibold">{t("history_col_file")}</th>
+                <th scope="col" className="p-3 font-semibold">{t("history_col_date")}</th>
+                <th scope="col" className="p-3 font-semibold text-right">{t("history_col_findings")}</th>
+                <th scope="col" className="p-3 font-semibold text-right">{t("history_col_score")}</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-200">
+              {history
+                .slice()
+                .reverse()
+                .map((h) => {
+                  const unreadable = h.status === "error";
+                  return (
+                    <tr key={h.scan_id}>
+                      <td className="p-3 font-medium break-all">{h.file}</td>
+                      <td className="p-3 tabular-nums whitespace-nowrap">{h.date}</td>
+                      <td className="p-3 text-right tabular-nums whitespace-nowrap">
+                        {unreadable
+                          ? "-"
+                          : `${h.findings_count} ${h.findings_count === 1 ? t("finding_count_one") : t("findings_count")}`}
+                      </td>
+                      <td className="p-3 text-right font-semibold tabular-nums whitespace-nowrap">
+                        {unreadable ? (
+                          <span className="inline-flex items-center gap-1 text-risk-high">
+                            <AlertOctagon className="w-4 h-4" aria-hidden />
+                            {t("history_unreadable")}
+                          </span>
+                        ) : (
+                          h.score
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+            </tbody>
+          </table>
+        </div>
       </section>
 
       <div>
