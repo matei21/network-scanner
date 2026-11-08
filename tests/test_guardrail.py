@@ -134,6 +134,7 @@ def fake_net(monkeypatch):
                         lambda: {"interface": "Wi-Fi", "gateway": "10.74.130.53", "ip": "10.74.130.9",
                                  "subnet": "10.74.130.0/24"})
     monkeypatch.setattr(scan_cli, "run_nmap_scan", lambda *a, **k: calls.append(a) or {"success": False})
+    monkeypatch.setattr(scan_cli, "wifi_ssid", lambda: "RSH-7")  # on the team hotspot, whatever this laptop is on
     return calls
 
 

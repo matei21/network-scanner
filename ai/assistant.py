@@ -788,17 +788,30 @@ def suggest_followups(scan_data: dict, answer_text: str, language: str = "ro") -
 
 # ── Scan Diff Narration ───────────────────────────────────────────────
 
-def narrate_diff(diff_data: dict, language: str = "ro") -> dict:
-    """Generate a narrative summary comparing two scans."""
+def narrate_diff(diff_data: dict, language: str = "ro", compared_with: str | None = None) -> dict:
+    """Generate a narrative summary comparing two scans.
+
+    compared_with: file name of the older scan, shown first so the reader knows what is compared.
+    """
     old_score = diff_data.get("old_score")
     new_score = diff_data.get("new_score")
     resolved = diff_data.get("resolved_findings", [])
     new_findings = diff_data.get("new_findings", [])
     added = diff_data.get("devices_added", [])
     removed = diff_data.get("devices_removed", [])
+    # Ports of a device that appeared or disappeared are already covered by the device line.
+    opened = [p for p in diff_data.get("ports_opened", []) if p["ip"] not in added]
+    closed = [p for p in diff_data.get("ports_closed", []) if p["ip"] not in removed]
+    nothing_changed = not (resolved or new_findings or added or removed or opened or closed)
+
+    def port_line(p, on):
+        service = f" ({p['service']})" if p.get("service") else ""
+        return f"  - {p['port']}/{p['protocol']}{service} {on} {p['ip']}"
 
     if language == "ro":
         parts = []
+        if compared_with:
+            parts.append(f"Comparat cu: {compared_with}")
         if old_score is not None and new_score is not None:
             delta = new_score - old_score
             if delta > 0:
@@ -823,10 +836,19 @@ def narrate_diff(diff_data: dict, language: str = "ro") -> dict:
         if removed:
             parts.append(f"\n{len(removed)} dispozitiv{'e disparute' if len(removed) != 1 else ' disparut'}: {', '.join(removed)}")
 
-        if not resolved and not new_findings and not added and not removed:
+        if opened:
+            parts.append(f"\n{len(opened)} port{'uri deschise' if len(opened) != 1 else ' deschis'}:")
+            parts.extend(port_line(p, "pe") for p in opened)
+        if closed:
+            parts.append(f"\n{len(closed)} port{'uri inchise' if len(closed) != 1 else ' inchis'}:")
+            parts.extend(port_line(p, "pe") for p in closed)
+
+        if nothing_changed:
             parts.append("Nicio schimbare detectata fata de scanul anterior.")
     else:
         parts = []
+        if compared_with:
+            parts.append(f"Compared with: {compared_with}")
         if old_score is not None and new_score is not None:
             delta = new_score - old_score
             if delta > 0:
@@ -851,15 +873,25 @@ def narrate_diff(diff_data: dict, language: str = "ro") -> dict:
         if removed:
             parts.append(f"\n{len(removed)} removed device{'s' if len(removed) != 1 else ''}: {', '.join(removed)}")
 
-        if not resolved and not new_findings and not added and not removed:
+        if opened:
+            parts.append(f"\n{len(opened)} opened port{'s' if len(opened) != 1 else ''}:")
+            parts.extend(port_line(p, "on") for p in opened)
+        if closed:
+            parts.append(f"\n{len(closed)} closed port{'s' if len(closed) != 1 else ''}:")
+            parts.extend(port_line(p, "on") for p in closed)
+
+        if nothing_changed:
             parts.append("No changes detected compared to the previous scan.")
 
     return {
         "narrative": "\n".join(parts),
+        "compared_with": compared_with,
         "old_score": old_score,
         "new_score": new_score,
         "resolved_count": len(resolved),
         "new_count": len(new_findings),
         "devices_added_count": len(added),
         "devices_removed_count": len(removed),
+        "ports_opened_count": len(opened),
+        "ports_closed_count": len(closed),
     }

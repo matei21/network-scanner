@@ -18,7 +18,7 @@ export default function DiffNarrator({ scanId }) {
       .then((d) => !cancelled && setData(d))
       .catch((e) => {
         if (!cancelled) {
-          if (String(e.message || e).includes("404")) setNoPrev(true);
+          if (e.status === 404 || String(e.message || e).includes("404")) setNoPrev(true);
           setData(null);
         }
       })

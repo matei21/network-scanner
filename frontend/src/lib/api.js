@@ -10,13 +10,27 @@ const USE_MOCK = import.meta.env.VITE_USE_MOCK !== "0";
 // Simulate a small delay so loading states are visible in mock mode.
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// FastAPI puts the reason in {"detail": ...} (e.g. why the guardrail refused a scan); show it, not just the code.
+async function httpError(r) {
+  let message = `HTTP ${r.status}`;
+  try {
+    const body = await r.json();
+    if (typeof body?.detail === "string") message = body.detail;
+  } catch {
+    // not JSON
+  }
+  const err = new Error(message);
+  err.status = r.status;
+  return err;
+}
+
 export async function getLatestScan() {
   if (USE_MOCK) {
     await sleep(250);
     return mockScan;
   }
   const r = await fetch("/api/scan/latest");
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -28,7 +42,7 @@ export async function getScan(id) {
     return mockScan;
   }
   const r = await fetch(`/api/scan/${encodeURIComponent(id)}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -42,22 +56,54 @@ export async function uploadXml(file) {
   const fd = new FormData();
   fd.append("file", file);
   const r = await fetch("/api/scan/upload", { method: "POST", body: fd });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
-export async function runLiveScan({ confirm }) {
-  if (!confirm) throw new Error("Live scan requires explicit confirmation.");
+// Live scan = background job: preview (what & where, no scan) -> start -> poll -> done / cancel.
+let mockPolls = 0;
+
+export async function getLiveScanPreview() {
   if (USE_MOCK) {
-    await sleep(800);
-    return mockScan;
+    await sleep(200);
+    return { allowed: true, target: "192.168.1.0/24", ssid: "RSH-demo", subnet: "192.168.1.0/24", reason: "" };
+  }
+  const r = await fetch("/api/scan/live/preview");
+  if (!r.ok) throw await httpError(r);
+  return r.json();
+}
+
+export async function startLiveScan() {
+  if (USE_MOCK) {
+    mockPolls = 0;
+    return { job_id: "mock", status: "running", phase: "discovery", percent: 0 };
   }
   const r = await fetch("/api/scan/live", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ confirm: true }),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
+  return r.json();
+}
+
+export async function getLiveScan(jobId) {
+  if (USE_MOCK) {
+    mockPolls += 1;
+    const percent = Math.min(100, mockPolls * 20);
+    return percent < 100
+      ? { job_id: jobId, status: "running", phase: "tcp", percent, remaining: "0:00:10" }
+      : { job_id: jobId, status: "done", percent: 100, result: mockScan };
+  }
+  const r = await fetch(`/api/scan/live/${encodeURIComponent(jobId)}`);
+  if (!r.ok) throw await httpError(r);
+  return r.json();
+}
+
+export async function cancelLiveScan(jobId) {
+  if (USE_MOCK) return { job_id: jobId, status: "cancelled" };
+  const r = await fetch(`/api/scan/live/${encodeURIComponent(jobId)}/cancel`, { method: "POST" });
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -67,7 +113,7 @@ export async function getHistory() {
     return mockScan.history;
   }
   const r = await fetch("/api/scans/history");
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -77,7 +123,7 @@ export async function deleteHistory() {
     return { ok: true };
   }
   const r = await fetch("/api/scans/history", { method: "DELETE" });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -97,7 +143,7 @@ export async function askAssistant(question, scanId, language) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ question, scan_id: scanId, language }),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -117,7 +163,7 @@ export async function getDetailedFix(findingCode, deviceIp, scanId, language = "
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ finding_code: findingCode, device_ip: deviceIp, scan_id: scanId, language }),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -130,7 +176,7 @@ export async function getDeviceNames() {
     };
   }
   const r = await fetch("/api/device-names");
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -144,7 +190,7 @@ export async function saveDeviceName(ip, customName, suggestedName) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ip, custom_name: customName, suggested_name: suggestedName }),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -159,7 +205,7 @@ export async function suggestDeviceNames(scanId, language = "ro") {
     };
   }
   const r = await fetch(`/api/device-names/suggest/${encodeURIComponent(scanId)}?language=${language}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -176,7 +222,7 @@ export async function narrateDiff(oldScanId, newScanId, language = "ro") {
     };
   }
   const r = await fetch(`/api/assistant/narrate-diff/${encodeURIComponent(oldScanId)}/${encodeURIComponent(newScanId)}?language=${language}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -193,7 +239,7 @@ export async function narrateDiffVsPrevious(scanId, language = "ro") {
     };
   }
   const r = await fetch(`/api/assistant/narrate-diff-latest/${encodeURIComponent(scanId)}?language=${language}`);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -208,7 +254,7 @@ export async function getAISettings() {
     return { provider: "local", has_groq_key: false };
   }
   const r = await fetch("/api/settings/ai");
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -224,7 +270,7 @@ export async function updateAISettings(provider, groqApiKey) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -242,7 +288,7 @@ export async function getFixInfo(findingCode, ip, port, language = "ro", gateway
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ finding_code: findingCode, ip, port, language, gateway }),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -256,7 +302,7 @@ export async function executeFix(findingCode, ip, port, language = "ro", gateway
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ finding_code: findingCode, ip, port, language, gateway }),
   });
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }
 
@@ -277,6 +323,6 @@ export async function narrateScan(scanId, language = "ro") {
     ? `/api/assistant/narrate/${encodeURIComponent(scanId)}?language=${language}`
     : `/api/assistant/narrate?language=${language}`;
   const r = await fetch(url);
-  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  if (!r.ok) throw await httpError(r);
   return r.json();
 }

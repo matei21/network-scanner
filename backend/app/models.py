@@ -23,7 +23,7 @@ class DiffResult(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    target: str
+    target: str | None = None  # None = the subnet the laptop is connected to
     confirm: bool = False
 
 
@@ -32,6 +32,7 @@ class NetworkInfo(BaseModel):
     gateway: str | None = None
     ip: str | None = None
     subnet: str | None = None
+    ssid: str | None = None
     error: str | None = None
 
 
