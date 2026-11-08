@@ -303,7 +303,9 @@ header.app-menubar [role="tab"][aria-selected="true"] .tab-count {
   z-index: 40;
   width: min(380px, calc(100vw - 2.5rem));
   max-height: 60vh;
-  background-color: rgba(255, 255, 255, 0.75);
+  background-color: rgba(255, 255, 255, 0.93);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border: 2px solid var(--border);
   border-radius: 1rem;
   box-shadow: 0 16px 48px rgba(40, 30, 10, 0.25);
@@ -420,6 +422,23 @@ footer {
     0 1px 2px rgba(0, 0, 0, 1) !important;
 }
 
+/* Map title and hint sit on small see-through cream cards (the parchment's
+   own colour), so they stay readable over the map. */
+.map-chip {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 0.75rem;
+  background-color: rgba(243, 224, 193, 0.8);
+  border: 1px solid rgba(160, 120, 70, 0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  box-shadow: 0 2px 6px rgba(40, 30, 10, 0.12);
+}
+[data-mode="expert"] .network-map .map-chip {
+  background-color: rgba(15, 36, 71, 0.75) !important;
+  color: #E4F4FF !important;
+}
+
 /* Hostname mini-card on the map stays readable on dark bg */
 [data-mode="expert"] .network-map span[style*="rgba(255, 255, 255, 0.75)"] {
   background-color: rgba(15, 36, 71, 0.75) !important;
@@ -467,6 +486,15 @@ footer {
 }
 .map-legend .legend-text {
   color: var(--text-primary) !important;
+}
+/* Irregular, corner-free outline: every corner gets a different curve. */
+.map-legend {
+  border-radius: 3.5rem 6rem 4.5rem 7rem / 4rem 3rem 5.5rem 3.5rem !important;
+  padding: 1.75rem 2.25rem !important;
+}
+/* Device types that are NOT in this network: shown, but faded. */
+.map-legend .legend-absent {
+  opacity: 0.45;
 }
 
 /* ---- DARK MODE ---- */
@@ -759,4 +787,137 @@ footer {
 [data-mode="expert"] :is(.bg-amber-50, .bg-orange-50, .bg-red-50, .bg-green-50, .bg-emerald-50, .bg-blue-50,
   .bg-sky-50, .bg-indigo-50, .bg-purple-50, .bg-gray-50, .bg-gray-100) * {
   color: #F2F8FF !important;
+}
+
+/* Score trend points: pointer on hover, no browser focus box (the point grows instead). */
+.chart-point { cursor: pointer; outline: none; }
+
+/* --- Glass card (History → comparison with the previous scan) ---------
+   Simple mode only: 75% see-through with a frosted blur. Expert mode keeps
+   its own, more specific .bg-purple-50 colours. */
+.glass-card {
+  background-color: rgba(250, 245, 255, 0.5) !important;
+  border-color: rgba(255, 255, 255, 0.6) !important;
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+  box-shadow: 0 8px 24px rgba(60, 40, 90, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.6);
+}
+
+/* History list cloud, simple mode: 50% glass. A parent with `filter` would
+   stop backdrop-filter from seeing the page behind, so here the cloud has
+   no drop-shadow outline: the frosted edge alone marks its shape. */
+[data-mode="simple"] .glass-cloud { filter: none; }
+[data-mode="simple"] .glass-cloud .cloud-body {
+  background-color: rgba(255, 255, 255, 0.5) !important;
+  backdrop-filter: blur(14px) saturate(140%);
+  -webkit-backdrop-filter: blur(14px) saturate(140%);
+}
+
+/* Score trend chart: irregular, corner-free outline (same idea as the legend). */
+.blob-frame {
+  overflow: hidden;
+  border-radius: 3.5rem 6rem 4.5rem 7rem / 4rem 3rem 5.5rem 3.5rem;
+}
+
+/* --- "Fix it" sun on the score card (ScoreSemaphore) ------------------
+   Opens the Problems tab. Rays turn a little on hover / keyboard focus. */
+.fix-sun {
+  position: relative;
+  width: 148px;
+  height: 148px;
+  margin-left: auto;
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+.fix-sun:hover { transform: scale(1.06); }
+.fix-sun:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 4px; }
+.fix-sun-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  filter: drop-shadow(0 4px 8px rgba(120, 70, 0, 0.25));
+}
+.fix-sun-rays {
+  fill: #F2A93B;
+  transform-origin: 70px 70px;
+  transition: transform 0.6s ease;
+}
+.fix-sun:hover .fix-sun-rays,
+.fix-sun:focus-visible .fix-sun-rays { transform: rotate(30deg); }
+.fix-sun-disc {
+  fill: #FFD45C;
+  stroke: #F2A93B;
+  stroke-width: 4;
+}
+.fix-sun-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1rem;
+  font-weight: 800;
+  color: #5A3300 !important;
+  text-shadow: none !important;
+}
+/* Expert (night) mode: a glowing star instead of the sun. */
+.fix-shape-star { display: none; }
+[data-mode="expert"] .fix-shape-sun { display: none; }
+[data-mode="expert"] .fix-shape-star {
+  display: block;
+  filter: drop-shadow(0 0 8px rgba(255, 220, 120, 0.7));
+  transition: transform 0.6s ease;
+}
+[data-mode="expert"] .fix-sun:hover .fix-shape-star,
+[data-mode="expert"] .fix-sun:focus-visible .fix-shape-star { transform: rotate(14deg); }
+.fix-star-body {
+  fill: #FFE07A;
+  stroke: #F5C542;
+  stroke-width: 5;
+  stroke-linejoin: round;
+}
+[data-mode="expert"] .fix-sun-label {
+  color: #0F2447 !important;
+  padding-top: 6px;   /* the star's visual centre sits a little lower */
+}
+
+/* --- Network summary as a cloud (ScanNarrator) ------------------------
+   The body keeps its normal background colour (bg-blue-50, also in expert
+   mode); a mask cuts it into a cloud: round puffs along the top, rounded
+   bottom. One painted shape, so translucent colours never overlap darker.
+   The outline and shadow come from drop-shadow on the wrapper, because a
+   CSS border cannot follow a masked shape. */
+.cloud-card {
+  filter: drop-shadow(0 0 1px #93c5fd) drop-shadow(0 0 1px #93c5fd)
+          drop-shadow(0 8px 14px rgba(40, 60, 90, 0.12));
+}
+[data-mode="expert"] .cloud-card {
+  filter: drop-shadow(0 0 1px rgba(127, 190, 223, 0.9)) drop-shadow(0 8px 14px rgba(0, 0, 0, 0.25));
+}
+.cloud-body {
+  padding: 4.75rem 2.25rem 2.5rem;
+  /* Puffs are ellipses sized in % of the width, so they overlap at every screen size. */
+  --cloud-mask:
+    /* four round corners */
+    radial-gradient(circle at 40px 70px, #000 40px, transparent 40.5px),
+    radial-gradient(circle at calc(100% - 40px) 70px, #000 40px, transparent 40.5px),
+    radial-gradient(circle at 40px calc(100% - 40px), #000 40px, transparent 40.5px),
+    radial-gradient(circle at calc(100% - 40px) calc(100% - 40px), #000 40px, transparent 40.5px),
+    /* puffs along the top */
+    radial-gradient(ellipse 11% 54px at 14% 66px, #000 99%, transparent 100%),
+    radial-gradient(ellipse 11% 66px at 32% 68px, #000 99%, transparent 100%),
+    radial-gradient(ellipse 11% 58px at 51% 62px, #000 99%, transparent 100%),
+    radial-gradient(ellipse 11% 66px at 70% 68px, #000 99%, transparent 100%),
+    radial-gradient(ellipse 10% 52px at 87% 68px, #000 99%, transparent 100%),
+    /* smaller puffs along the bottom */
+    radial-gradient(ellipse 13% 30px at 26% calc(100% - 30px), #000 99%, transparent 100%),
+    radial-gradient(ellipse 13% 30px at 50% calc(100% - 30px), #000 99%, transparent 100%),
+    radial-gradient(ellipse 13% 30px at 74% calc(100% - 30px), #000 99%, transparent 100%),
+    /* the body between the puffs */
+    linear-gradient(#000 0 0) 0 70px / 100% calc(100% - 110px) no-repeat,
+    linear-gradient(#000 0 0) 40px 70px / calc(100% - 80px) calc(100% - 86px) no-repeat;
+  -webkit-mask: var(--cloud-mask);
+  mask: var(--cloud-mask);
 }

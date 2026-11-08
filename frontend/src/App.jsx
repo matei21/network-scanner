@@ -108,7 +108,7 @@ function AppInner() {
         {tab === "overview" && (
           <div className="space-y-5">
             <ChangeAlert changes={scan?.changes} />
-            <ScoreSemaphore score={scan?.score} scan={scan} loading={loading} />
+            <ScoreSemaphore score={scan?.score} scan={scan} loading={loading} onFix={() => { setTab("findings"); window.scrollTo({ top: 0, behavior: "smooth" }); }} />
             {scan && scan.status !== "error" && scan.scan_id && (
               <ScanNarrator scanId={scan.scan_id} />
             )}
@@ -141,7 +141,7 @@ function AppInner() {
             <HistoryView scan={scan} onDelete={onDeleteHistory} />
           </>
         )}
-        {scan && scan.status !== "error" && (
+        {tab === "overview" && scan && scan.status !== "error" && (
           <div className="mt-4">
             <PdfDownload scanId={scan.scan_id} />
           </div>

@@ -367,7 +367,7 @@ def _build_analyzer_context(scan_data: dict, expert: bool = False) -> str:
     lines.append(f"Dispozitive gasite: {len(devices)}")
     for d in devices:
         dtype = d.get("type_label_ro", d.get("type", "dispozitiv"))
-        lines.append(f"\n  {dtype} ({d.get('ip', '?')}) — {d.get('vendor', 'necunoscut')}")
+        lines.append(f"\n  {dtype} ({d.get('ip', '?')}) - {d.get('vendor', 'necunoscut')}")
         if expert and d.get("open_ports"):
             ports = ", ".join(f"{p.get('port')}/{p.get('protocol', 'tcp')} {p.get('service', '')} {p.get('product', '')} {p.get('version', '')}".strip()
                               for p in d["open_ports"])
@@ -375,7 +375,7 @@ def _build_analyzer_context(scan_data: dict, expert: bool = False) -> str:
         for f in d.get("findings", []):
             tmpl = get_template(f.get("code", ""), "ro")
             expl = tmpl["explanation"] if tmpl else f.get("code", "?")
-            lines.append(f"    [{f.get('severity', '?').upper()}] {f.get('code', '?')} port {f.get('port', '?')} — {expl}")
+            lines.append(f"    [{f.get('severity', '?').upper()}] {f.get('code', '?')} port {f.get('port', '?')} - {expl}")
             if expert and tmpl:
                 lines.append(f"      Dovada: {f.get('evidence', '-')}; {tmpl.get('cis_control', '')}; {tmpl.get('owasp_iot', '')}")
     return "\n".join(lines)
@@ -506,18 +506,18 @@ def _technical_report(code: str, device: dict, lang: str) -> str:
         f"(-{t.get('points', '?')} {'puncte din scor' if ro else 'score points'})",
         f"{'Tinta' if ro else 'Target'}: {device.get('ip', '?')}:{device.get('port', '?')}"
         + (f" ({device.get('service')})" if device.get("service") else "")
-        + (f" — {device.get('vendor')}" if device.get("vendor") else ""),
+        + (f" - {device.get('vendor')}" if device.get("vendor") else ""),
     ]
     if fix.get("explanation_expert"):
         lines.append(f"{'Vector de atac' if ro else 'Attack vector'}: {fix['explanation_expert']}")
     if t.get("cis_control"):
         m = re.search(r"Control\s+(\d+)", t["cis_control"])
         meaning = _CIS_MEANING.get(m.group(1)) if m else None
-        lines.append(f"CIS: {t['cis_control']}" + (f" — {meaning[0] if ro else meaning[1]}." if meaning else "."))
+        lines.append(f"CIS: {t['cis_control']}" + (f" - {meaning[0] if ro else meaning[1]}." if meaning else "."))
     if t.get("owasp_iot"):
         m = re.search(r"[TI](\d+)", t["owasp_iot"])
         info = _OWASP_IOT.get(int(m.group(1))) if m else None
-        lines.append(f"OWASP IoT: {t['owasp_iot']}" + (f" — {info[1] if ro else info[2]}." if info else "."))
+        lines.append(f"OWASP IoT: {t['owasp_iot']}" + (f" - {info[1] if ro else info[2]}." if info else "."))
 
     if fix.get("command"):
         if here:
@@ -561,7 +561,7 @@ def _restart_guard(question: str, answer: str, lang: str) -> str:
         return answer
     if lang == "ro":
         warn = (
-            "⚠ Atentie: tinerea apasata a butonului Reset cateva secunde NU este o repornire — aduce routerul la "
+            "⚠ Atentie: tinerea apasata a butonului Reset cateva secunde NU este o repornire - aduce routerul la "
             "setarile din fabrica si sterge parola WiFi si configurarea.\n"
             "Pentru o repornire sigura: 1. Scoate routerul din priza. 2. Asteapta 30 de secunde. "
             "3. Baga-l la loc si asteapta 2 minute sa porneasca. "
@@ -569,7 +569,7 @@ def _restart_guard(question: str, answer: str, lang: str) -> str:
         )
     else:
         warn = (
-            "⚠ Warning: holding the Reset button for several seconds is NOT a restart — it restores factory "
+            "⚠ Warning: holding the Reset button for several seconds is NOT a restart - it restores factory "
             "settings and erases your WiFi password and configuration.\n"
             "For a safe restart: 1. Unplug the router. 2. Wait 30 seconds. 3. Plug it back in and wait 2 minutes. "
             "(Or, in the router's admin page, look for the 'Reboot' / 'Restart' button.)"
