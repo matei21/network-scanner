@@ -8,6 +8,11 @@ python -m analyzer data/validation --out results/
 pytest
 ```
 
+## Run the app and the live demo
+
+Backend, frontend, lab containers, scan → Fix → scan again, and how to reset
+the fixes before a demo: see **[DEMO.md](DEMO.md)**.
+
 ## Structura proiectului
 
 ```
