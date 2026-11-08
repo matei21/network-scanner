@@ -116,9 +116,9 @@ def _score_history(source: str) -> list[dict]:
 @router.post("/upload")
 async def upload_xml(file: UploadFile, source: Source = "real"):
     xml_path = await _save_upload(file, _new_scan_dir())
+    # An unreadable file is a normal result, not a server error: the contract answers
+    # status="error" + a clear message, and it is kept in history like in a batch.
     result = analyze_file(xml_path)
-    if result.error:
-        raise HTTPException(422, f"Could not read {result.file}: {result.error}")
     return _store(result, result.file, xml_path, source)
 
 
