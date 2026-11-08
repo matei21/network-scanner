@@ -696,3 +696,43 @@ footer {
   color: #FFFFFF !important;
   background: rgba(127, 190, 223, 0.35) !important;
 }
+
+/* --- Weighted score breakdown (hero card) — themed for light + expert/dark mode */
+.weighted-panel {
+  background-color: var(--bg-card);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+.weighted-panel .wp-divider, .wp-divider { border-color: var(--border); }
+.wp-muted { color: var(--text-muted); }
+.wp-bad { color: #B91C1C; }
+.wp-warn { color: #B45309; }
+.wp-good { color: #1B5E20; }
+[data-mode="expert"] .wp-bad { color: #FF7B7B !important; }
+[data-mode="expert"] .wp-warn { color: #FFC978 !important; }
+[data-mode="expert"] .wp-good { color: #7FDA87 !important; }
+[data-mode="expert"] .hero-card .weighted-panel p.wp-muted { color: var(--text-muted) !important; }
+
+/* --- AI settings dropdown in the menu bar: own colours, so the dark-header overrides don't apply */
+.ai-menu {
+  background-color: #FFFDF7;
+  color: #1A2E1E;
+  border: 2px solid #4A8A52;
+}
+.ai-menu-muted { color: #4E5F4C; }
+.ai-menu-option { border: 1px solid rgba(74, 138, 82, 0.35); }
+.ai-menu-option.is-selected { border-color: #2F6B37; background-color: #E6F3D7; }
+.ai-menu-input { border: 1px solid #8AA88E; background: #FFFFFF; color: #1A2E1E; }
+.ai-menu-save { background-color: #2F6B37; color: #FFFFFF; }
+.ai-menu-save:hover { background-color: #234B2A; }
+.ai-menu-warn { color: #9A3412; }
+.ai-menu input[type="radio"]:focus-visible, .ai-menu button:focus-visible, .ai-menu-input:focus-visible {
+  outline: 3px solid #2563EB; outline-offset: 2px;
+}
+[data-mode="expert"] .ai-menu { background-color: #12233F; color: #E4F4FF; border-color: #7FBEDF; }
+[data-mode="expert"] .ai-menu-muted { color: #B4CDE0; }
+[data-mode="expert"] .ai-menu-option { border-color: rgba(127, 190, 223, 0.4); }
+[data-mode="expert"] .ai-menu-option.is-selected { border-color: #7FBEDF; background-color: rgba(127, 190, 223, 0.18); }
+[data-mode="expert"] .ai-menu-input { background: #0F1C33; color: #E4F4FF; border-color: #7FBEDF; }
+[data-mode="expert"] .ai-menu-save { background-color: #7FBEDF; color: #0F2447; }
+[data-mode="expert"] .ai-menu-warn { color: #FFC978; }

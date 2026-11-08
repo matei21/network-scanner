@@ -29,9 +29,9 @@ class Assistant:
         self.ai = AIService(enable_cloud=enable_cloud, enable_local=enable_local, groq_api_key=groq_api_key)
         self.chatbot = Chatbot(self.ai, scan_data)
 
-    def ask(self, question: str, language: str = "ro") -> dict:
-        """Pune o intrebare despre scan. Returneaza {text, source}."""
-        return self.chatbot.ask(question, language)
+    def ask(self, question: str, language: str = "ro", expert: bool = False) -> dict:
+        """Pune o intrebare despre scan. Returneaza {text, source, agents, ...}."""
+        return self.chatbot.ask(question, language, expert)
 
     def explain(self, finding_code: str, device_info: dict, language: str = "ro") -> dict:
         """Genereaza explicatie personalizata pentru un finding."""
@@ -41,7 +41,7 @@ class Assistant:
         """Genereaza pasi de remediere personalizati."""
         return self.ai.generate_fix_steps(finding_code, device_info, language)
 
-    def get_detailed_fix(self, finding_code: str, device_info: dict, language: str = "ro") -> dict:
+    def get_detailed_fix(self, finding_code: str, device_info: dict, language: str = "ro", expert: bool = False) -> dict:
         """
         Agentic pipeline for detailed fix:
           1. Search Integrator agent filters DuckDuckGo results
@@ -49,7 +49,7 @@ class Assistant:
         Each agent gets a short focused prompt — no hallucination from prompt overload.
         """
         if self.chatbot._orchestrator:
-            return self.chatbot._orchestrator.detailed_fix(finding_code, device_info, language)
+            return self.chatbot._orchestrator.detailed_fix(finding_code, device_info, language, expert)
 
         # Fallback: old monolithic path (if orchestrator failed to init)
         action = _code_to_action(finding_code)
@@ -129,97 +129,106 @@ def enrich_scan_data(scan_result_dict: dict) -> dict:
 
 
 # ── Custom Risk Score ─────────────────────────────────────────────────
+#
+# The official score treats every finding the same: 100 - sum(points). The weighted score keeps that as
+# its base and adjusts it for context the official formula can't see. Every adjustment is a signed delta
+# (negative = riskier), so the rows shown in the UI and the PDF always add up to the final score.
 
 _DEVICE_TYPE_WEIGHT = {
-    "camera": 1.5,
-    "router": 1.3,
-    "smart_home": 1.2,
-    "server": 1.1,
+    "router": 1.25,     # the gateway protects every other device
+    "camera": 1.25,     # privacy: video of the inside of the home
+    "server": 1.2,      # holds data / shared files
+    "smart_home": 1.15, # can control locks, plugs, heating
+    "unknown": 1.1,     # unidentified = not trusted
     "computer": 1.0,
     "phone": 1.0,
     "smart_tv": 0.9,
-    "printer": 0.8,
-    "unknown": 1.0,
+    "printer": 0.9,
 }
 
-_DANGEROUS_COMBOS = {
-    frozenset({"TELNET_OPEN", "OUTDATED_SERVICE"}),
-    frozenset({"TELNET_OPEN", "HTTP_ADMIN_CLEARTEXT"}),
-    frozenset({"RDP_EXPOSED", "OUTDATED_SERVICE"}),
-    frozenset({"VNC_EXPOSED", "OUTDATED_SERVICE"}),
-    frozenset({"DB_EXPOSED", "SMB_EXPOSED"}),
-    frozenset({"CAMERA_STREAM_EXPOSED", "HTTP_ADMIN_CLEARTEXT"}),
-    frozenset({"UPNP_EXPOSED", "TELNET_OPEN"}),
-}
+# Pairs on the SAME device that make each other worse.
+_DANGEROUS_COMBOS = [
+    (("HTTP_ADMIN_CLEARTEXT", "TELNET_OPEN"), "cleartext_admin"),     # two plaintext admin channels, same password
+    (("OUTDATED_SERVICE", "TELNET_OPEN"), "exploitable_shell"),        # known exploit + remote shell
+    (("CAMERA_STREAM_EXPOSED", "HTTP_ADMIN_CLEARTEXT"), "camera_takeover"),  # watch the stream + steal the admin password
+    (("RDP_EXPOSED", "SMB_EXPOSED"), "lateral_movement"),              # classic Windows lateral movement pair
+    (("DB_EXPOSED", "OUTDATED_SERVICE"), "exploitable_data"),
+    (("DB_EXPOSED", "SMB_EXPOSED"), "data_exposure"),
+    (("OUTDATED_SERVICE", "VNC_EXPOSED"), "exploitable_shell"),
+]
+
+_DENSITY_PER_FINDING = 3      # per finding beyond the 2nd on one device
+_DENSITY_CAP = 6              # per device
+_COMBO_PENALTY = 8
+_COMBO_CAP = 16
+_SPREAD_PENALTY = 5           # more than 60% of devices have issues (at least 3 devices)
+_GATEWAY_HIGH_PENALTY = 10    # the router itself has a HIGH finding
+# The weighted score refines the official one, it doesn't replace it: adjustments are bounded.
+_MAX_PENALTY = 30
+_MAX_BONUS = 10
 
 
 def custom_risk_score(scan_data: dict) -> dict:
-    """Compute a weighted risk score using multiple heuristics.
-
-    Returns dict with total score, breakdown, and explanation.
-    Standard score: max(0, 100 - sum(points)).
-    Custom score: applies device-type weights, density penalty,
-    dangerous combos, systemic penalty, and gateway penalty.
-    """
+    """Weighted risk score: official base + context adjustments. See the constants above."""
     devices = scan_data.get("devices", [])
-    standard_score = scan_data.get("score", 100)
-    if not devices:
-        return {"score": standard_score, "breakdown": [], "standard_score": standard_score}
+    standard_score = scan_data.get("score")
+    base_points = sum(f.get("points", 0) for d in devices for f in d.get("findings", []))
+    breakdown: list[dict] = []
+    if base_points:
+        n = sum(len(d.get("findings", [])) for d in devices)
+        breakdown.append({"key": "findings", "delta": -base_points, "detail": str(n)})
 
-    total_deductions = 0
-    breakdown = []
+    # 1. Device criticality: the same finding matters more on a router than on a printer.
+    weight_delta = 0.0
+    weighted = []
+    for d in devices:
+        pts = sum(f.get("points", 0) for f in d.get("findings", []))
+        w = _DEVICE_TYPE_WEIGHT.get(d.get("type", "unknown"), 1.0)
+        if pts and w != 1.0:
+            weight_delta -= pts * (w - 1.0)
+            weighted.append(f"{d.get('ip', '?')} x{w:g}")
+    if round(weight_delta):
+        breakdown.append({"key": "device_weight", "delta": round(weight_delta), "detail": ", ".join(weighted)})
 
-    # 1. Weighted finding points per device type
-    weighted_points = 0
-    for device in devices:
-        device_type = device.get("type", "unknown")
-        weight = _DEVICE_TYPE_WEIGHT.get(device_type, 1.0)
-        for finding in device.get("findings", []):
-            pts = finding.get("points", 0)
-            weighted_points += pts * weight
-
-    base_deduction = round(weighted_points)
-    if base_deduction != sum(f.get("points", 0) for d in devices for f in d.get("findings", [])):
-        breakdown.append(("device_weight", round(weighted_points - sum(f.get("points", 0) for d in devices for f in d.get("findings", [])))))
-
-    total_deductions += base_deduction
-
-    # 2. Density penalty: device with 3+ findings gets extra -5 each
-    for device in devices:
-        n = len(device.get("findings", []))
+    # 2. Concentration: many issues on one device usually mean it was never configured.
+    for d in devices:
+        n = len(d.get("findings", []))
         if n >= 3:
-            penalty = (n - 2) * 5
-            total_deductions += penalty
-            breakdown.append(("density", -penalty, device.get("ip", "?")))
+            breakdown.append({"key": "density", "delta": -min((n - 2) * _DENSITY_PER_FINDING, _DENSITY_CAP),
+                              "detail": f"{d.get('ip', '?')} ({n})"})
 
-    # 3. Dangerous combinations
-    for device in devices:
-        codes = {f.get("code", "") for f in device.get("findings", [])}
-        for combo in _DANGEROUS_COMBOS:
-            if combo.issubset(codes):
-                total_deductions += 10
-                breakdown.append(("combo", -10, f"{'+'.join(combo)} on {device.get('ip', '?')}"))
+    # 3. Dangerous combinations on the same device (capped so one device can't dominate).
+    combo_total = 0
+    for d in devices:
+        codes = {f.get("code", "") for f in d.get("findings", [])}
+        for pair, _kind in _DANGEROUS_COMBOS:
+            if set(pair) <= codes and combo_total < _COMBO_CAP:
+                delta = min(_COMBO_PENALTY, _COMBO_CAP - combo_total)
+                combo_total += delta
+                breakdown.append({"key": "combo", "delta": -delta, "detail": f"{' + '.join(pair)} @ {d.get('ip', '?')}"})
 
-    # 4. Systemic penalty: >60% devices affected
-    devices_with_findings = sum(1 for d in devices if d.get("findings"))
-    if len(devices) > 1 and devices_with_findings / len(devices) > 0.6:
-        total_deductions += 10
-        breakdown.append(("systemic", -10, f"{devices_with_findings}/{len(devices)} devices affected"))
+    # 4. Spread: problems on most devices point to a network-wide habit (default settings everywhere).
+    affected = sum(1 for d in devices if d.get("findings"))
+    if len(devices) >= 3 and affected / len(devices) > 0.6:
+        breakdown.append({"key": "systemic", "delta": -_SPREAD_PENALTY, "detail": f"{affected}/{len(devices)}"})
 
-    # 5. Gateway penalty: router with HIGH finding
-    for device in devices:
-        if device.get("type") == "router" or device.get("is_gateway"):
-            has_high = any(f.get("severity") == "high" for f in device.get("findings", []))
-            if has_high:
-                total_deductions += 15
-                breakdown.append(("gateway_high", -15, device.get("ip", "?")))
-                break
+    # 5. Gateway: a HIGH issue on the router exposes everything behind it.
+    gateway = next((d for d in devices if d.get("type") == "router" or d.get("is_gateway")), None)
+    if gateway and any(f.get("severity") == "high" for f in gateway.get("findings", [])):
+        breakdown.append({"key": "gateway_high", "delta": -_GATEWAY_HIGH_PENALTY, "detail": gateway.get("ip", "?")})
 
-    custom = max(0, 100 - total_deductions)
+    adjust = sum(item["delta"] for item in breakdown if item["key"] != "findings")
+    bounded = max(-_MAX_PENALTY, min(_MAX_BONUS, adjust))
+    if bounded != adjust:
+        breakdown.append({"key": "cap", "delta": bounded - adjust, "detail": f"{-_MAX_PENALTY}/+{_MAX_BONUS}"})
+
+    raw = 100 + sum(item["delta"] for item in breakdown)
     return {
-        "score": custom,
+        "score": max(0, min(100, raw)),
         "standard_score": standard_score,
+        "raw": raw,
         "breakdown": breakdown,
+        "weights": _DEVICE_TYPE_WEIGHT,
     }
 
 

@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { useLanguage } from "../i18n/LanguageContext";
 import { Leaf, Languages, Eye, EyeOff, Upload, Radar } from "lucide-react";
+import AISettings from "./AISettings";
 
 // Full top menu bar: logo, nav tabs, upload/scan actions, mode + lang toggles.
 // All collapses gracefully with flex-wrap on narrow screens.
@@ -112,6 +113,7 @@ export default function Header({
                 {expert ? t("mode_expert") : t("mode_simple")}
               </span>
             </button>
+            <AISettings />
             <button
               type="button"
               onClick={toggle}

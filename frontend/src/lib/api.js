@@ -81,7 +81,7 @@ export async function deleteHistory() {
   return r.json();
 }
 
-export async function askAssistant(question, scanId, language) {
+export async function askAssistant(question, scanId, language, expert = false) {
   if (USE_MOCK) {
     await sleep(400);
     return {
@@ -95,13 +95,13 @@ export async function askAssistant(question, scanId, language) {
   const r = await fetch("/api/assistant/ask", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, scan_id: scanId, language }),
+    body: JSON.stringify({ question, scan_id: scanId, language, expert }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 
-export async function getDetailedFix(findingCode, deviceIp, scanId, language = "ro") {
+export async function getDetailedFix(findingCode, deviceIp, scanId, language = "ro", expert = false) {
   if (USE_MOCK) {
     await sleep(500);
     return {
@@ -115,7 +115,7 @@ export async function getDetailedFix(findingCode, deviceIp, scanId, language = "
   const r = await fetch("/api/assistant/detailed-fix", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ finding_code: findingCode, device_ip: deviceIp, scan_id: scanId, language }),
+    body: JSON.stringify({ finding_code: findingCode, device_ip: deviceIp, scan_id: scanId, language, expert }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
@@ -228,7 +228,7 @@ export async function updateAISettings(provider, groqApiKey) {
   return r.json();
 }
 
-export async function getFixInfo(findingCode, ip, port, language = "ro", gateway) {
+export async function getFixInfo(findingCode, ip, port, language = "ro", scanId) {
   if (USE_MOCK) {
     await sleep(200);
     const mockCommands = {
@@ -240,22 +240,28 @@ export async function getFixInfo(findingCode, ip, port, language = "ro", gateway
   const r = await fetch("/api/fix/info", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ finding_code: findingCode, ip, port, language, gateway }),
+    body: JSON.stringify({ finding_code: findingCode, ip, port, language, scan_id: scanId }),
   });
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
 
-export async function executeFix(findingCode, ip, port, language = "ro", gateway) {
+export async function executeFix(findingCode, ip, port, language = "ro", scanId) {
   if (USE_MOCK) {
     await sleep(1000);
-    return { status: "success", stdout: "Command executed successfully.", command: "mock-command" };
+    return { status: "remote", executed: false, message: "Mock mode: nothing runs." };
   }
   const r = await fetch("/api/fix/execute", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ finding_code: findingCode, ip, port, language, gateway }),
+    body: JSON.stringify({ finding_code: findingCode, ip, port, language, scan_id: scanId }),
   });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return r.json();
+}
+
+export async function getFixResult(runId) {
+  const r = await fetch(`/api/fix/result/${encodeURIComponent(runId)}`);
   if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }

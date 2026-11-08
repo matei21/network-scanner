@@ -34,6 +34,8 @@ TRUSTED_HOSTS = _env_list("TRUSTED_HOSTS", ["localhost", "127.0.0.1", "::1", "te
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+    from ai.ai_service import get_local_llm
+    get_local_llm()  # starts loading the model in a background thread; requests never wait on it
     yield
 
 

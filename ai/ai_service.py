@@ -9,6 +9,7 @@ Nu se pune in git -- e in .gitignore.
 
 import json
 import logging
+import threading
 from pathlib import Path
 
 from ai.templates import FINDING_TEMPLATES, get_template
@@ -56,50 +57,72 @@ class LocalLLM:
     """Client pentru model local GGUF via llama-cpp-python."""
 
     def __init__(self):
-        self.llm = None
+        self._llm = None
+        self._lock = threading.Lock()
+        # llama.cpp contexts are not safe for concurrent inference.
+        self._infer_lock = threading.Lock()
 
         if not LOCAL_MODEL_PATH.exists():
-            download_local_model()
+            logger.warning(
+                "Local model not found at %s. AI will use template fallback. "
+                "To enable local LLM, run: python -c \"from ai.ai_service import download_local_model; download_local_model()\"",
+                LOCAL_MODEL_PATH,
+            )
+            return
 
-        if LOCAL_MODEL_PATH.exists():
-            try:
-                from llama_cpp import Llama
+        # Load in a background thread so web requests are never blocked.
+        t = threading.Thread(target=self._load_model, daemon=True, name="LocalLLM-loader")
+        t.start()
 
-                self.llm = Llama(
-                    model_path=str(LOCAL_MODEL_PATH),
-                    n_ctx=4096,
-                    n_threads=4,
-                    verbose=False,
-                )
-                logger.info("Local LLM (Qwen 2.5 3B) initializat.")
-            except ImportError:
-                logger.warning(
-                    "llama-cpp-python nu e instalat. "
-                    "Ruleaza: pip install llama-cpp-python"
-                )
-            except Exception as e:
-                logger.warning("Local LLM error la incarcare: %s", e)
+    def _load_model(self):
+        try:
+            from llama_cpp import Llama
+            llm = Llama(model_path=str(LOCAL_MODEL_PATH), n_ctx=4096, n_threads=4, verbose=False)
+            with self._lock:
+                self._llm = llm
+            logger.info("Local LLM (Qwen 2.5 3B) initializat in background.")
+        except ImportError:
+            logger.warning("llama-cpp-python nu e instalat. Ruleaza: pip install llama-cpp-python")
+        except Exception as e:
+            logger.warning("Local LLM error la incarcare: %s", e)
 
     @property
     def available(self):
-        return self.llm is not None
+        with self._lock:
+            return self._llm is not None
 
     def chat(self, system_prompt, user_message, max_tokens=512):
-        if not self.available:
+        with self._lock:
+            llm = self._llm
+        if not llm:
             return None
         try:
-            response = self.llm.create_chat_completion(
-                messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_message},
-                ],
-                max_tokens=max_tokens,
-                temperature=0.3,
-            )
+            with self._infer_lock:
+                response = llm.create_chat_completion(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                    max_tokens=max_tokens,
+                    temperature=0.3,
+                )
             return response["choices"][0]["message"]["content"]
         except Exception as e:
             logger.warning("Local LLM error: %s", e)
             return None
+
+
+_shared_local = None
+_shared_local_lock = threading.Lock()
+
+
+def get_local_llm():
+    """One model per process: every assistant shares it instead of loading 2 GB again."""
+    global _shared_local
+    with _shared_local_lock:
+        if _shared_local is None:
+            _shared_local = LocalLLM()
+        return _shared_local
 
 
 class AIService:
@@ -109,7 +132,7 @@ class AIService:
     """
 
     def __init__(self, enable_cloud=False, enable_local=True, groq_api_key=None):
-        self.local = LocalLLM() if enable_local else None
+        self.local = get_local_llm() if enable_local else None
         self.groq = None
         if groq_api_key:
             try:
@@ -308,7 +331,7 @@ class Chatbot:
         self._orchestrator = None
         try:
             from ai.agents import AgentOrchestrator
-            self._orchestrator = AgentOrchestrator(ai_service.local, scan_data)
+            self._orchestrator = AgentOrchestrator(ai_service, scan_data)
         except Exception as e:
             logger.warning("AgentOrchestrator init failed, falling back to monolithic: %s", e)
 
@@ -319,10 +342,10 @@ class Chatbot:
         )
         self.history = []
 
-    def ask(self, question, language="ro"):
+    def ask(self, question, language="ro", expert=False):
         """Pune o intrebare chatbot-ului. Returneaza dict cu text si source."""
         if self._orchestrator:
-            return self._orchestrator.ask(question, language)
+            return self._orchestrator.ask(question, language, expert)
 
         # Monolithic fallback
         self.history.append({"role": "user", "content": question})
