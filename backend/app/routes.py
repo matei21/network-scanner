@@ -18,7 +18,7 @@ from analyzer.service import analyze_file, analyze_folder, to_dict
 from ai.assistant import Assistant, custom_risk_score, enrich_scan_data, narrate_scan, suggest_followups, narrate_diff
 from ai.fingerprint import guess_device_type, suggest_device_name
 from ai.pdf_report import generate_report
-from ai.fix_commands import get_fix_command, FIX_COMMANDS
+from ai.fix_commands import get_fix_command, FIX_COMMANDS, local_ips
 
 from . import database as db
 from . import fix_runner
@@ -32,6 +32,7 @@ from .models import (
     ScanRequest,
 )
 from .scanner import get_scan_job, run_nmap_scan, start_scan_job
+from .self_firewall import mark_firewalled_ports
 
 logger = logging.getLogger(__name__)
 
@@ -255,7 +256,15 @@ def _job_view(job) -> dict:
     return d
 
 
+def _apply_own_firewall(xml_path: Path) -> None:
+    """Ports of this laptop blocked by a Fix rule show as the network sees them (self_firewall.py)."""
+    changed = mark_firewalled_ports(xml_path, local_ips())
+    if changed:
+        logger.info("%d port(s) of this laptop are blocked by NetScanner firewall rules", changed)
+
+
 def _store_live(xml_path: Path, target: str) -> dict:
+    _apply_own_firewall(xml_path)
     result = analyze_file(xml_path)
     if result.error:
         raise ValueError(f"nmap output could not be read: {result.error}")
@@ -313,6 +322,7 @@ def live_scan(req: ScanRequest):
         detail = scan_result.get("error") or (scan_result.get("stderr") or "").strip()[:300]
         raise HTTPException(500, t("scan_failed_detail", detail=detail) if detail else t("scan_failed"))
 
+    _apply_own_firewall(xml_path)
     result = analyze_file(xml_path)
     if result.error:
         raise HTTPException(500, t("nmap_unreadable", detail=result.error))
