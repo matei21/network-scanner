@@ -162,7 +162,7 @@ export default function LiveScanDialog({ onClose, onDone }) {
               type="button"
               onClick={onCancel}
               disabled={cancelling || !job?.job_id}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 disabled:opacity-60"
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-60"
             >
               {cancelling ? t("scan_cancelling") : t("scan_cancel")}
             </button>
@@ -170,7 +170,7 @@ export default function LiveScanDialog({ onClose, onDone }) {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 rounded-lg border border-gray-300 bg-white hover:bg-gray-50"
+              className="px-4 py-2 rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50"
             >
               {stage === "confirm" ? t("scan_confirm_no") : t("scan_close")}
             </button>
