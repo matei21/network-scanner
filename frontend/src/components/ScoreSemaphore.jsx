@@ -158,9 +158,39 @@ function WeightedScorePanel({ customRisk, officialScore, lang }) {
   );
 }
 
-export default function ScoreSemaphore({ score, scan, loading }) {
+// A plump 5-point star (outer radius 68, inner 44) centred in the 140x140 box.
+const STAR_POINTS = Array.from({ length: 10 }, (_, i) => {
+  const r = i % 2 === 0 ? 68 : 44;
+  const a = -Math.PI / 2 + (i * Math.PI) / 5;
+  return `${(70 + r * Math.cos(a)).toFixed(1)},${(72 + r * Math.sin(a)).toFixed(1)}`;
+}).join(" ");
+
+// "Fix it" button: a sun in simple mode, a star in expert (night) mode.
+// Both shapes are drawn; CSS shows the one that matches data-mode.
+function FixSun({ onClick, label, ariaLabel }) {
+  const rays = Array.from({ length: 12 }, (_, i) => i * 30);
+  return (
+    <button type="button" onClick={onClick} aria-label={ariaLabel} className="fix-sun shrink-0">
+      <svg viewBox="0 0 140 140" className="fix-sun-svg fix-shape-sun" aria-hidden>
+        <g className="fix-sun-rays">
+          {rays.map((deg) => (
+            <rect key={deg} x="64" y="2" width="12" height="20" rx="6" transform={`rotate(${deg} 70 70)`} />
+          ))}
+        </g>
+        <circle cx="70" cy="70" r="52" className="fix-sun-disc" />
+      </svg>
+      <svg viewBox="0 0 140 140" className="fix-sun-svg fix-shape-star" aria-hidden>
+        <polygon points={STAR_POINTS} className="fix-star-body" />
+      </svg>
+      <span className="fix-sun-label">{label}</span>
+    </button>
+  );
+}
+
+export default function ScoreSemaphore({ score, scan, loading, onFix }) {
   const { t, lang } = useLanguage();
   const verdict = heroVerdict(scan);
+  const findingCount = (scan?.devices || []).reduce((n, d) => n + (d.findings?.length || 0), 0);
 
   if (loading) {
     return (
@@ -175,7 +205,7 @@ export default function ScoreSemaphore({ score, scan, loading }) {
     safe: { ring: "ring-green-500", text: "text-risk-safe", Icon: CheckCircle2, label: t("verdict_safe"), desc: t("verdict_safe_desc") },
     watch: { ring: "ring-amber-500", text: "text-risk-medium", Icon: AlertTriangle, label: t("verdict_watch"), desc: t("verdict_watch_desc") },
     at_risk: { ring: "ring-red-500", text: "text-risk-high", Icon: ShieldAlert, label: t("verdict_at_risk"), desc: t("verdict_at_risk_desc") },
-    error: { ring: "ring-gray-500", text: "text-risk-info", Icon: AlertTriangle, label: "—", desc: "" },
+    error: { ring: "ring-gray-500", text: "text-risk-info", Icon: AlertTriangle, label: "-", desc: "" },
   }[verdict];
 
   const { Icon } = theme;
@@ -191,7 +221,7 @@ export default function ScoreSemaphore({ score, scan, loading }) {
         <div
           className={`score-disc w-32 h-32 shrink-0 rounded-full ring-8 ${theme.ring} flex flex-col items-center justify-center`}
         >
-          <span className={`text-5xl font-bold tabular-nums ${theme.text}`}>{score ?? "—"}</span>
+          <span className={`text-5xl font-bold tabular-nums ${theme.text}`}>{score ?? "-"}</span>
           <span className="text-xs text-gray-600">{t("score_of_100")}</span>
         </div>
         <div className="min-w-0 flex-1">
@@ -202,6 +232,9 @@ export default function ScoreSemaphore({ score, scan, loading }) {
           <p className="mt-2 text-lg">{theme.desc}</p>
           <WeightedScorePanel customRisk={scan?.custom_risk_score} officialScore={score} lang={lang} />
         </div>
+        {onFix && findingCount > 0 && verdict !== "error" && (
+          <FixSun onClick={onFix} label={t("fix_cta")} ariaLabel={t("fix_cta_aria")} />
+        )}
       </div>
     </div>
   );

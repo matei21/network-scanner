@@ -41,7 +41,7 @@ export default function PdfDownload({ scanId }) {
         type="button"
         onClick={handleDownload}
         disabled={loading}
-        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-gray-800 text-white hover:bg-gray-900 text-sm font-medium disabled:opacity-60"
+        className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-blue-700 text-white hover:bg-blue-800 text-sm font-medium disabled:opacity-60"
       >
         {loading
           ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden />

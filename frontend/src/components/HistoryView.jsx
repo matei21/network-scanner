@@ -6,6 +6,8 @@ import DiffDetails from "./DiffDetails";
 
 function Sparkline({ points }) {
   // Score trend chart — larger, white-on-green palette (user feedback).
+  // The date of a point shows only while it is hovered or focused.
+  const [active, setActive] = useState(null);
   if (!points || points.length === 0) return null;
   const w = 720;
   const h = 240;
@@ -21,9 +23,10 @@ function Sparkline({ points }) {
   const area = `${line} L ${xs[xs.length - 1]} ${h - padY} L ${xs[0]} ${h - padY} Z`;
 
   return (
+    <div className="blob-frame">
     <svg
       viewBox={`0 0 ${w} ${h}`}
-      className="w-full h-auto"
+      className="w-full h-auto block"
       role="img"
       aria-label="Score trend"
       preserveAspectRatio="xMidYMid meet"
@@ -35,7 +38,7 @@ function Sparkline({ points }) {
         </linearGradient>
       </defs>
       {/* Card background: white */}
-      <rect x="0" y="0" width={w} height={h} fill="var(--chart-bg)" rx="16" />
+      <rect x="0" y="0" width={w} height={h} fill="var(--chart-bg)" />
       {/* 70-line threshold (safe score) */}
       <line
         x1={padX}
@@ -55,18 +58,41 @@ function Sparkline({ points }) {
       {/* Line */}
       <path d={line} fill="none" stroke="var(--chart-line)" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
       {/* Points + labels */}
-      {xs.map((x, i) => (
-        <g key={i}>
-          <circle cx={x} cy={ys[i]} r="6" fill="var(--chart-point-fill)" stroke="var(--chart-line)" strokeWidth="3" />
-          <text x={x} y={h - 10} textAnchor="middle" fontSize="13" fill="var(--chart-label-date)" fontWeight="600">
-            {points[i].date?.slice(5)}
-          </text>
-          <text x={x} y={ys[i] - 14} textAnchor="middle" fontSize="18" fill="var(--chart-label-score)" fontWeight="700">
-            {points[i].score}
-          </text>
-        </g>
-      ))}
+      {xs.map((x, i) => {
+        const on = active === i;
+        return (
+          <g
+            key={i}
+            tabIndex={0}
+            role="img"
+            aria-label={`${points[i].date}: ${points[i].score}`}
+            className="chart-point"
+            onMouseEnter={() => setActive(i)}
+            onMouseLeave={() => setActive(null)}
+            onFocus={() => setActive(i)}
+            onBlur={() => setActive(null)}
+          >
+            {/* bigger invisible hit area, so the point is easy to hover */}
+            <circle cx={x} cy={ys[i]} r="18" fill="transparent" />
+            {on && (
+              <line x1={x} x2={x} y1={ys[i] + 8} y2={h - 30} stroke="var(--chart-line)"
+                strokeDasharray="3 3" strokeWidth="1.5" />
+            )}
+            <circle cx={x} cy={ys[i]} r={on ? 9 : 6} fill="var(--chart-point-fill)" stroke="var(--chart-line)" strokeWidth="3" />
+            <text x={x} y={ys[i] - 14} textAnchor="middle" fontSize="18" fill="var(--chart-label-score)" fontWeight="700">
+              {points[i].score}
+            </text>
+            {on && (
+              <text x={x} y={h - 10} fontSize="15" fill="var(--chart-label-date)" fontWeight="700"
+                textAnchor={x < 110 ? "start" : x > w - 110 ? "end" : "middle"}>
+                {points[i].date}
+              </text>
+            )}
+          </g>
+        );
+      })}
     </svg>
+    </div>
   );
 }
 
@@ -154,7 +180,9 @@ export default function HistoryView({ scan, onDelete }) {
 
       <section>
         <h3 className="on-video font-semibold mb-2 text-xl">{t("history_title")}</h3>
-        <div className="overflow-x-auto border border-gray-200 rounded-xl bg-white">
+        <div className="cloud-card glass-cloud">
+        <div className="cloud-body bg-white">
+        <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead className="border-b border-gray-200 text-gray-700">
               <tr>
@@ -178,6 +206,8 @@ export default function HistoryView({ scan, onDelete }) {
                 ))}
             </tbody>
           </table>
+        </div>
+        </div>
         </div>
       </section>
 

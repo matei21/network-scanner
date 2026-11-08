@@ -31,7 +31,7 @@ export default function DiffNarrator({ scanId }) {
 
   if (loading) {
     return (
-      <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-center gap-3">
+      <div className="glass-card bg-purple-50 border border-purple-200 rounded-2xl p-4 flex items-center gap-3">
         <Loader2 className="w-5 h-5 animate-spin text-purple-600" aria-hidden />
         <span className="text-sm text-purple-700">
           {lang === "ro" ? "Se compara cu scanul anterior..." : "Comparing with previous scan..."}
@@ -47,7 +47,7 @@ export default function DiffNarrator({ scanId }) {
   const trendColor = delta > 0 ? "text-green-700" : delta < 0 ? "text-red-700" : "text-gray-600";
 
   return (
-    <div className="bg-purple-50 border border-purple-200 rounded-2xl p-4">
+    <div className="glass-card bg-purple-50 border border-purple-200 rounded-2xl p-4">
       <div className="flex items-center gap-2 mb-2">
         <GitCompareArrows className="w-5 h-5 text-purple-700" aria-hidden />
         <h3 className="font-semibold text-purple-900">

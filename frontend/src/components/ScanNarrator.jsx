@@ -26,11 +26,13 @@ export default function ScanNarrator({ scanId }) {
 
   if (loading) {
     return (
-      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 flex items-center gap-3">
-        <Loader2 className="w-5 h-5 animate-spin text-blue-600" aria-hidden />
-        <span className="text-sm text-blue-700">
-          {lang === "ro" ? "Se genereaza rezumatul..." : "Generating summary..."}
-        </span>
+      <div className="cloud-card">
+        <div className="cloud-body bg-blue-50 flex items-center gap-3">
+          <Loader2 className="w-5 h-5 animate-spin text-blue-600" aria-hidden />
+          <span className="text-sm text-blue-700">
+            {lang === "ro" ? "Se genereaza rezumatul..." : "Generating summary..."}
+          </span>
+        </div>
       </div>
     );
   }
@@ -38,15 +40,17 @@ export default function ScanNarrator({ scanId }) {
   if (!data?.narrative) return null;
 
   return (
-    <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4">
-      <div className="flex items-center gap-2 mb-2">
-        <BookOpen className="w-5 h-5 text-blue-700" aria-hidden />
-        <h3 className="font-semibold text-blue-900">
-          {lang === "ro" ? "Rezumatul retelei tale" : "Your network summary"}
-        </h3>
-        <SpeakButton text={data.narrative} lang={lang} className="ml-auto" />
+    <div className="cloud-card">
+      <div className="cloud-body bg-blue-50">
+        <div className="flex items-center gap-2 mb-2">
+          <BookOpen className="w-5 h-5 text-blue-700" aria-hidden />
+          <h3 className="font-semibold text-blue-900">
+            {lang === "ro" ? "Rezumatul retelei tale" : "Your network summary"}
+          </h3>
+          <SpeakButton text={data.narrative} lang={lang} className="ml-auto" />
+        </div>
+        <p className="text-base text-blue-900 whitespace-pre-line">{data.narrative}</p>
       </div>
-      <p className="text-base text-blue-900 whitespace-pre-line">{data.narrative}</p>
     </div>
   );
 }

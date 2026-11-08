@@ -23,7 +23,7 @@ export default function DiffDetails({ diff }) {
   const { t } = useLanguage();
   if (!diff) return null;
 
-  const finding = (f) => `${f.finding_code} — ${f.ip}${f.port != null ? `:${f.port}` : ""}`;
+  const finding = (f) => `${f.finding_code} - ${f.ip}${f.port != null ? `:${f.port}` : ""}`;
   const port = (p) => `${p.ip}:${p.port}/${p.protocol}${p.service ? ` (${p.service})` : ""}`;
   // A device that appeared or disappeared already explains its ports.
   const opened = (diff.ports_opened || []).filter((p) => !(diff.devices_added || []).includes(p.ip));

@@ -18,6 +18,8 @@ const dict = {
     tab_devices: "Dispozitive",
     tab_findings: "Probleme",
     tab_history: "Istoric",
+    fix_cta: "Remediere",
+    fix_cta_aria: "Remediere: mergi la lista de probleme",
 
     upload_button: "Incarca scan (XML)",
     upload_hint: "Trage un fisier nmap XML aici sau fa click.",
@@ -141,6 +143,8 @@ const dict = {
     tab_devices: "Devices",
     tab_findings: "Problems",
     tab_history: "History",
+    fix_cta: "Fix it",
+    fix_cta_aria: "Fix it: go to the list of problems",
 
     upload_button: "Upload scan (XML)",
     upload_hint: "Drop an nmap XML file here or click.",

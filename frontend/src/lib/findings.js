@@ -111,9 +111,16 @@ export function heroVerdict(scan) {
   return "safe";
 }
 
+// The backend (ai/fingerprint.py) names some types differently from the UI.
+const TYPE_ALIASES = { computer: "pc", smart_tv: "tv", smart_home: "iot" };
+
+export function normalizeDeviceType(type) {
+  return TYPE_ALIASES[type] || type || "unknown";
+}
+
 // Emoji fallback used if the PNG at /devices/<type>.png is missing.
 export function deviceEmoji(type) {
-  switch (type) {
+  switch (normalizeDeviceType(type)) {
     case "router":
       return "🌐";
     case "camera":
@@ -140,7 +147,8 @@ export function deviceEmoji(type) {
 // Returns the PNG path user drops into /public/devices/<name>.png.
 // Keep names in sync with the user's icon set. pc + laptop share one icon
 // (laptop.png); nas + server share one (nas.png).
-export function deviceIconSrc(type) {
+export function deviceIconSrc(rawType) {
+  const type = normalizeDeviceType(rawType);
   const name = (() => {
     switch (type) {
       case "router":
@@ -196,5 +204,5 @@ export function deviceTypeLabel(type, lang) {
     unknown: "Unknown device",
   };
   const dict = lang === "ro" ? ro : en;
-  return dict[type] || dict.unknown;
+  return dict[normalizeDeviceType(type)] || dict.unknown;
 }

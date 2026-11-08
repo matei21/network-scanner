@@ -95,11 +95,11 @@ export default function NetworkMap({ devices }) {
   return (
     <>
       <div className="network-map rounded-2xl border border-gray-200 p-4 relative overflow-hidden">
-        <div className="relative z-10 flex items-baseline justify-between mb-2">
-          <h3 className="font-bold text-lg">
+        <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 mb-2">
+          <h3 className="map-chip font-bold text-xl">
             {lang === "ro" ? "Harta retelei" : "Network map"}
           </h3>
-          <span className="text-sm text-gray-600">
+          <span className="map-chip text-base text-gray-700">
             {lang === "ro"
               ? "Apasa pe un dispozitiv pentru detalii"
               : "Click a device for details"}
@@ -195,14 +195,14 @@ function NodeButton({ device, xPct, yPct, label, size, isHub, onClick }) {
         <DeviceIcon type={device.type} size={size - 10} />
       </span>
       <span
-        className="node-label text-xs font-semibold whitespace-nowrap max-w-[120px] truncate px-2 py-0.5 rounded-md"
-        style={{ fontSize: "0.75rem" }}
+        className="node-label font-semibold whitespace-nowrap max-w-[160px] truncate px-2 py-0.5 rounded-md"
+        style={{ fontSize: "0.95rem" }}
       >
         {device.hostname || device.ip}
       </span>
       {isHub && (
         <span
-          className="hub-label text-[10px] uppercase tracking-wider px-1.5 rounded"
+          className="hub-label text-xs uppercase tracking-wider px-1.5 rounded"
           style={{
             background: "var(--accent-soft)",
             color: "var(--accent-dark)",
