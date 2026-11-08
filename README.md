@@ -49,8 +49,8 @@ winget install --id Gitleaks.Gitleaks -e
 gitleaks detect --source . --verbose
 ```
 
-Expected result: `no leaks found` (exit code 0). Last verified: 24 commits,
-no leaks.
+Expected result: `no leaks found` (exit code 0). Last verified (gitleaks 8.30.1,
+`--log-opts="--all"`, every branch): 52 commits, no leaks.
 
 ## Privacy of scan files (NFR-02)
 
